@@ -19,6 +19,28 @@
 
 const DEFAULT_TIMEOUT_S = 45;
 
+/**
+ * How every sandbox we create is configured.
+ *
+ * `networkBlockAll` is the important one: the generated analysis is pure
+ * arithmetic over data we inject, so it has no legitimate reason to reach the
+ * network. Blocking it at the sandbox boundary means that even if the static
+ * screen in windows/codegen.ts misses something, the code still cannot call
+ * out or exfiltrate anything.
+ *
+ * The lifecycle settings exist to protect a hackathon credit balance: the
+ * sandbox is ephemeral, stops after a minute idle, and self-deletes — on top of
+ * the explicit delete in the `finally` block below.
+ */
+const SANDBOX_PARAMS = {
+  language: "python",
+  ephemeral: true,
+  networkBlockAll: true,
+  autoStopInterval: 1,
+  autoDeleteInterval: 5,
+  labels: { app: "weather-booking-agent", purpose: "ai-generated-window-analysis" },
+} as const;
+
 export interface DaytonaConfigInfo {
   configured: boolean;
   target?: string;
@@ -100,7 +122,7 @@ export async function runPythonInSandbox(
     };
   }
   interface DaytonaHandle {
-    create: () => Promise<SandboxHandle>;
+    create: (params?: Record<string, unknown>) => Promise<SandboxHandle>;
     delete: (sandbox: SandboxHandle) => Promise<void>;
   }
 
@@ -118,7 +140,7 @@ export async function runPythonInSandbox(
         : {}),
     }) as unknown as DaytonaHandle;
 
-    sandbox = await daytona.create();
+    sandbox = await daytona.create(SANDBOX_PARAMS);
 
     const response = await sandbox.process.codeRun(
       code,

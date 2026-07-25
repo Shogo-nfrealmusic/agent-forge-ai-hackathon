@@ -11,6 +11,7 @@ import {
 import { callChatCompletion } from "@/lib/ai/adapter";
 import { readAiProviders, type AiProviderConfig } from "@/lib/ai/providers";
 import { runPythonInSandbox } from "@/lib/sandbox/daytona";
+import { readWindowCache, windowCacheKey, writeWindowCache } from "@/lib/windows/cache";
 
 /**
  * "Is there a better slot on the same day?"
@@ -154,7 +155,7 @@ async function analyseWindowsInSandbox(
 export async function analyseWindows(
   booking: Booking,
   forecast: DayForecast,
-  opts: { provider?: AiProviderConfig | null } = {},
+  opts: { provider?: AiProviderConfig | null; useCache?: boolean } = {},
 ): Promise<WindowAnalysis | null> {
   if (forecast.hours.length === 0) return null;
 
@@ -169,13 +170,33 @@ export async function analyseWindows(
     );
   }
 
+  // A sandbox run costs credits, and the forecast does not change between two
+  // page views, so a successful result is reused for a short while.
+  const useCache = opts.useCache ?? true;
+  const key = windowCacheKey(booking.bookingId, forecastFingerprint(forecast));
+
+  if (useCache) {
+    const cached = readWindowCache(key);
+    if (cached) return cached;
+  }
+
   const result = await analyseWindowsInSandbox(booking, forecast, provider);
 
-  if ("analysis" in result) return result.analysis;
+  if ("analysis" in result) {
+    if (useCache) writeWindowCache(key, result.analysis);
+    return result.analysis;
+  }
 
   return analyseWindowsLocal(
     booking,
     forecast,
     `${result.error} - fell back to the trusted local analysis (generated code is never run outside a sandbox).`,
   );
+}
+
+/** Cheap content hash so a changed forecast invalidates the cache. */
+function forecastFingerprint(forecast: DayForecast): string {
+  return forecast.hours
+    .map((h) => `${h.hour}:${h.precipitationProbability}:${h.windSpeedKmh}:${h.weatherCode}`)
+    .join("|");
 }

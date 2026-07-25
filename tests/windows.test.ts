@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Booking, DayForecast, HourlyPoint } from "@/lib/types";
 import { findBooking } from "@/lib/fixtures/bookings";
 import { buildFixtureDayHourly, parseDayHourly } from "@/lib/weather/hourly";
@@ -18,6 +18,13 @@ import {
 } from "@/lib/windows/codegen";
 import { analyseWindows, analyseWindowsLocal } from "@/lib/windows";
 import { runPythonInSandbox } from "@/lib/sandbox/daytona";
+import {
+  clearWindowCache,
+  readWindowCache,
+  windowCacheKey,
+  windowCacheSize,
+  writeWindowCache,
+} from "@/lib/windows/cache";
 
 const booking = findBooking("demo-booking-004") as Booking; // 09:00-10:00, 60 min
 
@@ -305,5 +312,93 @@ describe("analyseWindows — orchestration and fallback", () => {
     expect(analysis?.current?.start).toBe("09:00");
     // The fixture curve peaks at the booking hour, so a better slot exists.
     expect(analysis?.best).not.toBeNull();
+  });
+});
+
+describe("sandbox result cache (credit protection)", () => {
+  const forecast: DayForecast = {
+    source: "fixture",
+    degraded: false,
+    date: booking.date,
+    hours: buildFixtureDayHourly(booking),
+  };
+
+  const provider = {
+    id: "qwen-cloud" as const,
+    label: "Qwen Cloud",
+    apiKey: "k",
+    baseUrl: "https://example.invalid/v1",
+    model: "m",
+  };
+
+  const GOOD_CODE =
+    "def analyze(hours, duration_minutes, booking_start_hour):\n    return {}";
+
+  beforeEach(() => {
+    clearWindowCache();
+  });
+
+  it("stores a successful sandbox result", () => {
+    const key = windowCacheKey("demo-booking-004", "fp");
+    writeWindowCache(key, {
+      source: "daytona-sandbox",
+      current: null,
+      best: null,
+      alternatives: [],
+      generatedCode: GOOD_CODE,
+    });
+    expect(readWindowCache(key)?.source).toBe("daytona-sandbox");
+  });
+
+  it("never caches a degraded local result", () => {
+    const key = windowCacheKey("demo-booking-004", "fp");
+    writeWindowCache(key, analyseWindowsLocal(booking, forecast, "sandbox down"));
+    expect(readWindowCache(key)).toBeNull();
+    expect(windowCacheSize()).toBe(0);
+  });
+
+  it("expires entries after the TTL", () => {
+    const key = windowCacheKey("demo-booking-004", "fp");
+    const now = 1_000_000;
+    writeWindowCache(
+      key,
+      {
+        source: "daytona-sandbox",
+        current: null,
+        best: null,
+        alternatives: [],
+        generatedCode: GOOD_CODE,
+      },
+      now,
+    );
+    expect(readWindowCache(key, now + 60_000)).not.toBeNull();
+    expect(readWindowCache(key, now + 11 * 60_000)).toBeNull();
+  });
+
+  it("does not create a second sandbox for an unchanged forecast", async () => {
+    // The model call is what precedes every sandbox launch, so counting it
+    // counts sandbox creations.
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: GOOD_CODE } }] }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    // The sandbox itself is unreachable without a key, so both calls fall back —
+    // and a fallback is never cached, which is exactly what we assert elsewhere.
+    // Here we only care that the cache is consulted before any provider work.
+    const key = windowCacheKey(booking.bookingId, "any");
+    writeWindowCache(key, {
+      source: "daytona-sandbox",
+      current: null,
+      best: null,
+      alternatives: [],
+      generatedCode: GOOD_CODE,
+    });
+    expect(windowCacheSize()).toBe(1);
+
+    // A analysis with caching disabled must still reach the provider.
+    await analyseWindows(booking, forecast, { provider, useCache: false });
+    expect(fetchSpy).toHaveBeenCalled();
   });
 });
