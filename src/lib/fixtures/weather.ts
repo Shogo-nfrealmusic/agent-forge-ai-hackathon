@@ -1,0 +1,132 @@
+import type { WeatherSummary } from "@/lib/types";
+
+/**
+ * Fixture weather, keyed by bookingId.
+ *
+ * Used (a) as the offline demo path and (b) as the fallback whenever the live
+ * weather API fails, times out, or the booking date is outside its forecast
+ * horizon. The demo therefore never shows a broken screen.
+ */
+type FixtureWeather = Omit<WeatherSummary, "source" | "fetchedAt" | "degraded" | "fallbackReason">;
+
+const FIXTURES: Record<string, FixtureWeather> = {
+  "demo-booking-001": {
+    date: "2026-08-10",
+    timeRange: "13:00-14:00",
+    precipitationProbabilityMax: 10,
+    precipitationMm: 0,
+    windSpeedMaxKmh: 12,
+    windGustMaxKmh: 19,
+    temperatureC: 31,
+    weatherCodes: [1],
+    conditionLabel: "概ね晴れ",
+    alerts: [],
+  },
+  "demo-booking-002": {
+    date: "2026-08-11",
+    timeRange: "10:00-11:30",
+    precipitationProbabilityMax: 65,
+    precipitationMm: 1.2,
+    windSpeedMaxKmh: 18,
+    windGustMaxKmh: 26,
+    temperatureC: 28,
+    weatherCodes: [3, 61],
+    conditionLabel: "曇り時々弱い雨",
+    alerts: [],
+  },
+  "demo-booking-003": {
+    date: "2026-08-12",
+    timeRange: "16:00-17:00",
+    precipitationProbabilityMax: 75,
+    precipitationMm: 3.4,
+    windSpeedMaxKmh: 20,
+    windGustMaxKmh: 28,
+    temperatureC: 27,
+    weatherCodes: [63],
+    conditionLabel: "雨",
+    alerts: [],
+  },
+  "demo-booking-004": {
+    date: "2026-08-13",
+    timeRange: "09:00-10:00",
+    precipitationProbabilityMax: 85,
+    precipitationMm: 7.8,
+    windSpeedMaxKmh: 22,
+    windGustMaxKmh: 29,
+    temperatureC: 26,
+    weatherCodes: [65],
+    conditionLabel: "強い雨",
+    alerts: [],
+  },
+  "demo-booking-005": {
+    date: "2026-08-14",
+    timeRange: "15:00-16:00",
+    precipitationProbabilityMax: 60,
+    precipitationMm: 5.1,
+    windSpeedMaxKmh: 24,
+    windGustMaxKmh: 29,
+    temperatureC: 30,
+    weatherCodes: [95],
+    conditionLabel: "雷雨",
+    alerts: [],
+  },
+  "demo-booking-006": {
+    date: "2026-08-15",
+    timeRange: "11:00-12:00",
+    precipitationProbabilityMax: 55,
+    precipitationMm: 4.0,
+    windSpeedMaxKmh: 42,
+    windGustMaxKmh: 61,
+    temperatureC: 29,
+    weatherCodes: [3, 80],
+    conditionLabel: "強風・にわか雨",
+    alerts: ["台風接近に伴う暴風注意報 (mock)"],
+  },
+  // Fallback only — this booking normally resolves through the live API.
+  "demo-booking-007": {
+    date: "2026-07-28",
+    timeRange: "14:00-15:00",
+    precipitationProbabilityMax: 35,
+    precipitationMm: 0.4,
+    windSpeedMaxKmh: 16,
+    windGustMaxKmh: 24,
+    temperatureC: 33,
+    weatherCodes: [2],
+    conditionLabel: "一部曇り",
+    alerts: [],
+  },
+};
+
+/** Neutral default for a bookingId with no dedicated fixture. */
+const DEFAULT_FIXTURE: FixtureWeather = {
+  date: "",
+  timeRange: "",
+  precipitationProbabilityMax: 20,
+  precipitationMm: 0,
+  windSpeedMaxKmh: 14,
+  windGustMaxKmh: 20,
+  temperatureC: 25,
+  weatherCodes: [2],
+  conditionLabel: "一部曇り (default fixture)",
+  alerts: [],
+};
+
+export function getFixtureWeather(
+  bookingId: string,
+  opts: { date?: string; timeRange?: string; fallbackReason?: string } = {},
+): WeatherSummary {
+  const base = FIXTURES[bookingId] ?? DEFAULT_FIXTURE;
+  return {
+    ...base,
+    date: base.date || opts.date || "",
+    timeRange: base.timeRange || opts.timeRange || "",
+    source: "fixture",
+    fetchedAt: new Date().toISOString(),
+    degraded: Boolean(opts.fallbackReason),
+    fallbackReason: opts.fallbackReason,
+  };
+}
+
+export function hasFixtureWeather(bookingId: string): boolean {
+  return bookingId in FIXTURES;
+}

@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/*
+ * Fixed light theme — a demo screen that flips with OS settings is a liability
+ * on a projector. System font stack only: no network font fetch at build time.
+ */
+:root {
+  --background: #f5f6f8;
+  --foreground: #14161a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP",
+    "Yu Gothic",
+    Meiryo,
+    sans-serif;
+}
