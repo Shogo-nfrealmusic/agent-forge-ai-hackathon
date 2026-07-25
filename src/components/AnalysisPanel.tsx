@@ -507,7 +507,7 @@ export default function AnalysisPanel({
             <p className="font-medium text-emerald-900">
               {p.recordedTitle} — {m.decision[recorded.decision]}
             </p>
-            <p className="mt-0.5 font-mono text-[11px] text-stone-400">
+            <p className="mt-0.5 break-all font-mono text-[11px] text-stone-400">
               id: {recorded.id} · bookingSystemMutated: {String(recorded.bookingSystemMutated)}
             </p>
           </div>
@@ -563,7 +563,7 @@ export default function AnalysisPanel({
             <div className="flex flex-wrap items-center gap-4 text-sm">
               <span className="text-xs font-medium">{p.channel}</span>
               {(["whatsapp", "email"] as DeliveryChannel[]).map((c) => (
-                <label key={c} className="flex items-center gap-1.5">
+                <label key={c} className="flex flex-wrap items-center gap-1.5">
                   <input
                     type="radio"
                     name="channel"
@@ -575,7 +575,7 @@ export default function AnalysisPanel({
                     }}
                   />
                   {m.channel[c]}
-                  <span className="font-mono text-xs text-stone-400">
+                  <span className="break-all font-mono text-xs text-stone-400">
                     {c === "whatsapp" ? targets.whatsapp : targets.email}
                   </span>
                 </label>
@@ -629,7 +629,7 @@ export default function AnalysisPanel({
                 {delivery.result.errorReason && (
                   <p className="mt-0.5 text-xs text-stone-500">{delivery.result.errorReason}</p>
                 )}
-                <p className="mt-0.5 font-mono text-[11px] text-stone-400">
+                <p className="mt-0.5 break-all font-mono text-[11px] text-stone-400">
                   {p.deliveredTo}: {delivery.result.destinationMasked} · {p.auditId}:{" "}
                   {delivery.entry.id.slice(0, 8)}
                 </p>

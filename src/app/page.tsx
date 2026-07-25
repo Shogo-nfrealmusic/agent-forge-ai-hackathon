@@ -14,36 +14,52 @@ function Row({ item, m }: { item: TriagedBooking; m: Messages }) {
   const { booking, weather, risk } = item;
   const wind = Math.max(weather.windSpeedMaxKmh, weather.windGustMaxKmh);
 
+  const when = `${booking.date.slice(5).replace("-", "/")} ${booking.time.split("-")[0]}`;
+
   return (
     <Link
       href={`/bookings/${booking.bookingId}`}
-      className="grid grid-cols-[7.5rem_1fr_5rem_4rem_4.5rem] items-baseline gap-x-4 px-3 py-3 text-sm hover:bg-white"
+      className="block px-3 py-3 hover:bg-white"
     >
-      <span className="tnum text-stone-500">
-        {booking.date.slice(5).replace("-", "/")}{" "}
-        <span className="text-stone-400">{booking.time.split("-")[0]}</span>
-      </span>
-      <span className="min-w-0">
-        <span className="font-medium">{booking.plan}</span>
-        <span className="text-stone-400"> · {booking.location}</span>
-        <span className="tnum text-stone-400">
-          {" "}
-          · {booking.durationMinutes}
-          {m.list.minutes}
+      {/* Mobile: two stacked lines. */}
+      <div className="sm:hidden">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="min-w-0 truncate text-sm font-medium">{booking.plan}</span>
+          <RiskBadge level={risk.riskLevel} size="sm" />
+        </div>
+        <div className="tnum mt-1 flex flex-wrap gap-x-3 text-xs text-stone-500">
+          <span>{when}</span>
+          <span className="min-w-0 truncate">{booking.location}</span>
+          <span>{weather.precipitationProbabilityMax}%</span>
+          <span>{wind} km/h</span>
+        </div>
+      </div>
+
+      {/* From sm: aligned columns. */}
+      <div className="hidden items-baseline gap-x-4 text-sm sm:grid sm:grid-cols-[7.5rem_1fr_5rem_4rem_4.5rem]">
+        <span className="tnum text-stone-500">{when}</span>
+        <span className="min-w-0 truncate">
+          <span className="font-medium">{booking.plan}</span>
+          <span className="text-stone-400"> · {booking.location}</span>
+          <span className="tnum text-stone-400">
+            {" "}
+            · {booking.durationMinutes}
+            {m.list.minutes}
+          </span>
         </span>
-      </span>
-      <RiskBadge level={risk.riskLevel} size="sm" />
-      <span className="tnum text-right text-stone-600">
-        {weather.precipitationProbabilityMax}%
-      </span>
-      <span className="tnum text-right text-stone-600">{wind} km/h</span>
+        <RiskBadge level={risk.riskLevel} size="sm" />
+        <span className="tnum text-right text-stone-600">
+          {weather.precipitationProbabilityMax}%
+        </span>
+        <span className="tnum text-right text-stone-600">{wind} km/h</span>
+      </div>
     </Link>
   );
 }
 
 function ColumnHeader({ m }: { m: Messages }) {
   return (
-    <div className="grid grid-cols-[7.5rem_1fr_5rem_4rem_4.5rem] gap-x-4 border-b border-stone-200 px-3 pb-2 text-[11px] uppercase tracking-wide text-stone-400">
+    <div className="hidden gap-x-4 border-b border-stone-200 px-3 pb-2 text-[11px] uppercase tracking-wide text-stone-400 sm:grid sm:grid-cols-[7.5rem_1fr_5rem_4rem_4.5rem]">
       <span>{m.list.colWhen}</span>
       <span>{m.list.colBooking}</span>
       <span>{m.list.colRisk}</span>
@@ -110,7 +126,7 @@ export default async function TriagePage() {
           <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-stone-400 hover:text-stone-600">
             {m.list.allClear}
             <span className="tnum ml-2 font-normal">{triage.clear.length}</span>
-            <span className="ml-3 font-normal normal-case tracking-normal">
+            <span className="ml-3 hidden font-normal normal-case tracking-normal sm:inline">
               {m.list.allClearHint}
             </span>
           </summary>

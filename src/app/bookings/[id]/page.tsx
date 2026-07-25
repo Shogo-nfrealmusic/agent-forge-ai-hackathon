@@ -57,7 +57,7 @@ export default async function BookingDetailPage({
           <dt className="text-[11px] uppercase tracking-wide text-stone-400">{d.customer}</dt>
           <dd className="mt-0.5 font-medium">
             {booking.customerName}
-            <span className="block font-mono text-[11px] font-normal text-stone-400">
+            <span className="block break-all font-mono text-[11px] font-normal text-stone-400">
               {booking.customerEmail} · {booking.customerPhone}
             </span>
           </dd>

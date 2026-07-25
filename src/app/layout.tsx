@@ -19,11 +19,11 @@ export default async function RootLayout({
     <html lang={locale} className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <header className="border-b border-stone-200 bg-white">
-          <div className="mx-auto flex max-w-4xl flex-wrap items-baseline gap-x-6 gap-y-1 px-6 py-4">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-baseline gap-x-6 gap-y-1 px-4 py-4 sm:px-6">
             <Link href="/" className="text-sm font-semibold tracking-tight">
               Weather Booking Agent
             </Link>
-            <span className="font-mono text-[11px] text-stone-400">{m.nav.prototypeNote}</span>
+            <span className="hidden font-mono text-[11px] text-stone-400 sm:inline">{m.nav.prototypeNote}</span>
             <nav className="ml-auto flex items-center gap-5 text-sm text-stone-500">
               <Link href="/" className="hover:text-stone-900">
                 {m.nav.bookings}
@@ -36,10 +36,10 @@ export default async function RootLayout({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">{children}</main>
+        <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-10">{children}</main>
 
         <footer className="border-t border-stone-200">
-          <div className="mx-auto max-w-4xl px-6 py-5 text-[11px] leading-relaxed text-stone-400">
+          <div className="mx-auto max-w-4xl px-4 py-5 text-[11px] sm:px-6 leading-relaxed text-stone-400">
             {m.footer}
           </div>
         </footer>
