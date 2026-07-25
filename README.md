@@ -23,7 +23,7 @@ Everything degrades instead of breaking: with nothing configured the whole app s
 
 ## What it does
 
-1. Lists mock bookings
+1. Triages the calendar: only bookings whose forecast crosses (or nears) a rule threshold are surfaced — calm days stay collapsed
 2. Fetches the forecast for the booking window (Open-Meteo, with a fixture fallback)
 3. Scores the risk as **Low / Medium / High** using deterministic rules — no AI involved
 4. Asks an AI for an assessment, a recommended action and a draft customer message
@@ -54,7 +54,7 @@ npm run dev                  # http://localhost:3000
 | `npm test` | Run the test suite (vitest, 218 tests) |
 | `npm run typecheck` | Type-check without emitting |
 
-A five-minute demo script is in [`docs/demo.md`](docs/demo.md).
+A five-minute demo script is in [`docs/demo.md`](docs/demo.md). The operator UI can be switched between English and Japanese (customer drafts are always English).
 
 ---
 

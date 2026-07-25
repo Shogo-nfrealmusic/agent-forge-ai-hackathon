@@ -95,6 +95,31 @@ const FIXTURES: Record<string, FixtureWeather> = {
     conditionLabel: "Partly cloudy",
     alerts: [],
   },
+  // Clear-weather days for the triage demo.
+  "demo-booking-008": {
+    date: "2026-08-16", timeRange: "09:00-10:00",
+    precipitationProbabilityMax: 10, precipitationMm: 0,
+    windSpeedMaxKmh: 9, windGustMaxKmh: 14, temperatureC: 29,
+    weatherCodes: [1], conditionLabel: "Mostly sunny", alerts: [],
+  },
+  "demo-booking-009": {
+    date: "2026-08-17", timeRange: "17:00-18:00",
+    precipitationProbabilityMax: 20, precipitationMm: 0,
+    windSpeedMaxKmh: 12, windGustMaxKmh: 18, temperatureC: 30,
+    weatherCodes: [2], conditionLabel: "Partly cloudy", alerts: [],
+  },
+  "demo-booking-010": {
+    date: "2026-08-18", timeRange: "10:00-11:00",
+    precipitationProbabilityMax: 5, precipitationMm: 0,
+    windSpeedMaxKmh: 8, windGustMaxKmh: 12, temperatureC: 28,
+    weatherCodes: [0], conditionLabel: "Clear sky", alerts: [],
+  },
+  "demo-booking-011": {
+    date: "2026-08-19", timeRange: "13:00-14:30",
+    precipitationProbabilityMax: 30, precipitationMm: 0.2,
+    windSpeedMaxKmh: 15, windGustMaxKmh: 21, temperatureC: 31,
+    weatherCodes: [2], conditionLabel: "Partly cloudy", alerts: [],
+  },
 };
 
 /** Neutral default for a bookingId with no dedicated fixture. */

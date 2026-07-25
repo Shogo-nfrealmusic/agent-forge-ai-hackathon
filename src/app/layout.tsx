@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getMessages } from "@/lib/i18n/server";
+import LangToggle from "@/components/LangToggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,38 +10,37 @@ export const metadata: Metadata = {
     "Human-in-the-loop AI agent that assesses weather risk for outdoor photo-shoot bookings and drafts customer messages. Prototype — mock data only.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const { locale, m } = await getMessages();
+
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang={locale} className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-4">
-            <Link href="/" className="text-base font-semibold tracking-tight">
-              Weather Booking Adjustment Agent
+        <header className="border-b border-stone-200 bg-white">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-baseline gap-x-6 gap-y-1 px-6 py-4">
+            <Link href="/" className="text-sm font-semibold tracking-tight">
+              Weather Booking Agent
             </Link>
-            <nav className="flex gap-4 text-sm text-slate-600">
-              <Link href="/" className="hover:text-slate-900 hover:underline">
-                Bookings
+            <span className="font-mono text-[11px] text-stone-400">{m.nav.prototypeNote}</span>
+            <nav className="ml-auto flex items-center gap-5 text-sm text-stone-500">
+              <Link href="/" className="hover:text-stone-900">
+                {m.nav.bookings}
               </Link>
-              <Link href="/audit" className="hover:text-slate-900 hover:underline">
-                Audit log
+              <Link href="/audit" className="hover:text-stone-900">
+                {m.nav.audit}
               </Link>
+              <LangToggle locale={locale} />
             </nav>
-            <span className="ml-auto rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-              PROTOTYPE / MOCK DATA · never writes to a booking system
-            </span>
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">{children}</main>
 
-        <footer className="border-t border-slate-200 bg-white">
-          <div className="mx-auto max-w-5xl px-6 py-4 text-xs leading-relaxed text-slate-500">
-            Hackathon prototype. It contains no real customer data and never changes, cancels or
-            refunds a booking. Staff decisions are written only to a local audit log, and a message
-            can only be delivered after a staff member has approved it.
+        <footer className="border-t border-stone-200">
+          <div className="mx-auto max-w-4xl px-6 py-5 text-[11px] leading-relaxed text-stone-400">
+            {m.footer}
           </div>
         </footer>
       </body>

@@ -1,118 +1,138 @@
 import Link from "next/link";
-import { listBookings } from "@/lib/fixtures/bookings";
+import { triageBookings, type TriagedBooking } from "@/lib/triage";
+import { getMessages } from "@/lib/i18n/server";
 import { describeAiProviders } from "@/lib/ai/providers";
 import { describeWhatsAppProvider } from "@/lib/delivery/whatsapp";
 import { describeDaytona } from "@/lib/sandbox/daytona";
+import { RiskBadge } from "@/components/badges";
+import type { Messages } from "@/lib/i18n/messages";
 
-// The capability badges reflect the runtime environment, not build time.
+// Triage reflects the runtime environment and forecast, not build time.
 export const dynamic = "force-dynamic";
 
-/** Booking list. Server component — reads fixtures only, no network. */
-export default function BookingListPage() {
-  const bookings = listBookings();
-  const aiProviders = describeAiProviders();
-  const whatsapp = describeWhatsAppProvider();
-  const daytona = describeDaytona();
-  const liveAi = aiProviders.filter((p) => p.configured);
-
-  const deliveryLabel = !whatsapp.configured
-    ? "delivery: link hand-off only"
-    : whatsapp.realSendEnabled
-      ? `delivery: LIVE via ${whatsapp.provider}`
-      : `delivery: ${whatsapp.provider} configured, sending locked`;
+function Row({ item, m }: { item: TriagedBooking; m: Messages }) {
+  const { booking, weather, risk } = item;
+  const wind = Math.max(weather.windSpeedMaxKmh, weather.windGustMaxKmh);
 
   return (
-    <div className="space-y-6">
+    <Link
+      href={`/bookings/${booking.bookingId}`}
+      className="grid grid-cols-[7.5rem_1fr_5rem_4rem_4.5rem] items-baseline gap-x-4 px-3 py-3 text-sm hover:bg-white"
+    >
+      <span className="tnum text-stone-500">
+        {booking.date.slice(5).replace("-", "/")}{" "}
+        <span className="text-stone-400">{booking.time.split("-")[0]}</span>
+      </span>
+      <span className="min-w-0">
+        <span className="font-medium">{booking.plan}</span>
+        <span className="text-stone-400"> · {booking.location}</span>
+        <span className="tnum text-stone-400">
+          {" "}
+          · {booking.durationMinutes}
+          {m.list.minutes}
+        </span>
+      </span>
+      <RiskBadge level={risk.riskLevel} size="sm" />
+      <span className="tnum text-right text-stone-600">
+        {weather.precipitationProbabilityMax}%
+      </span>
+      <span className="tnum text-right text-stone-600">{wind} km/h</span>
+    </Link>
+  );
+}
+
+function ColumnHeader({ m }: { m: Messages }) {
+  return (
+    <div className="grid grid-cols-[7.5rem_1fr_5rem_4rem_4.5rem] gap-x-4 border-b border-stone-200 px-3 pb-2 text-[11px] uppercase tracking-wide text-stone-400">
+      <span>{m.list.colWhen}</span>
+      <span>{m.list.colBooking}</span>
+      <span>{m.list.colRisk}</span>
+      <span className="text-right">{m.list.colRain}</span>
+      <span className="text-right">{m.list.colWind}</span>
+    </div>
+  );
+}
+
+export default async function TriagePage() {
+  const { m } = await getMessages();
+  const triage = await triageBookings();
+
+  const aiProviders = describeAiProviders().filter((p) => p.configured);
+  const whatsapp = describeWhatsAppProvider();
+  const daytona = describeDaytona();
+  const flagged = triage.action.length + triage.watch.length;
+
+  return (
+    <div className="space-y-10">
       <section>
-        <h1 className="text-xl font-bold tracking-tight">Bookings (mock data)</h1>
-        <p className="mt-1 text-sm leading-relaxed text-slate-600">
-          For each outdoor shoot, this agent assesses the weather risk and drafts a message for the
-          customer. A staff member makes the call — the agent never changes or cancels a booking,
-          and nothing is sent to a customer until it has been approved.
-        </p>
+        <h1 className="text-lg font-semibold tracking-tight">{m.list.title}</h1>
+        <p className="mt-1 text-sm text-stone-500">{m.list.subtitle(flagged, triage.total)}</p>
       </section>
 
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="rounded bg-white px-2.5 py-1 font-mono text-slate-600 ring-1 ring-slate-300">
-          bookings: fixture ({bookings.length})
-        </span>
-        <span className="rounded bg-white px-2.5 py-1 font-mono text-slate-600 ring-1 ring-slate-300">
-          weather: Open-Meteo → fixture fallback
-        </span>
-        <span
-          className={`rounded px-2.5 py-1 font-mono ring-1 ${
-            liveAi.length > 0
-              ? "bg-white text-slate-600 ring-slate-300"
-              : "bg-amber-50 text-amber-900 ring-amber-300"
-          }`}
-        >
-          ai:{" "}
-          {liveAi.length > 0
-            ? liveAi.map((p) => p.label).join(" → ")
-            : "mock (no provider key set)"}
-        </span>
-        <span
-          className={`rounded px-2.5 py-1 font-mono ring-1 ${
-            daytona.configured
-              ? "bg-white text-slate-600 ring-slate-300"
-              : "bg-amber-50 text-amber-900 ring-amber-300"
-          }`}
-        >
-          sandbox: {daytona.configured ? "Daytona" : "local trusted code"}
-        </span>
-        <span
-          className={`rounded px-2.5 py-1 font-mono ring-1 ${
-            whatsapp.configured && whatsapp.realSendEnabled
-              ? "bg-rose-50 text-rose-900 ring-rose-300"
-              : "bg-white text-slate-600 ring-slate-300"
-          }`}
-        >
-          {deliveryLabel}
-        </span>
-      </div>
+      {/* --- Needs action ------------------------------------------------- */}
+      <section>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+          {m.list.needsAction}
+          <span className="tnum ml-2 font-normal text-stone-400">{triage.action.length}</span>
+        </h2>
+        {triage.action.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-stone-400">{m.list.empty}</p>
+        ) : (
+          <div>
+            <ColumnHeader m={m} />
+            <div className="divide-y divide-stone-100">
+              {triage.action.map((item) => (
+                <Row key={item.booking.bookingId} item={item} m={m} />
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {bookings.map((booking) => (
-          <li key={booking.bookingId}>
-            <Link
-              href={`/bookings/${booking.bookingId}`}
-              className="block h-full rounded-lg border border-slate-200 bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-xs text-slate-500">{booking.bookingId}</span>
-                <span className="text-xs text-slate-500">{booking.durationMinutes} min</span>
-              </div>
-              <h2 className="mt-2 font-semibold">{booking.plan}</h2>
-              <dl className="mt-2 space-y-1 text-sm text-slate-600">
-                <div className="flex gap-2">
-                  <dt className="w-20 shrink-0 text-slate-400">When</dt>
-                  <dd>
-                    {booking.date} {booking.time}
-                  </dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-20 shrink-0 text-slate-400">Where</dt>
-                  <dd>{booking.location}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-20 shrink-0 text-slate-400">Customer</dt>
-                  <dd>
-                    {booking.customerName}
-                    <span className="block text-xs text-slate-400">
-                      {booking.customerEmail} · {booking.customerPhone}
-                    </span>
-                  </dd>
-                </div>
-              </dl>
-              {booking.notes && (
-                <p className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500">
-                  {booking.notes}
-                </p>
-              )}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {/* --- Watch -------------------------------------------------------- */}
+      {triage.watch.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+            {m.list.watch}
+            <span className="tnum ml-2 font-normal text-stone-400">{triage.watch.length}</span>
+          </h2>
+          <div className="divide-y divide-stone-100 border-t border-stone-200">
+            {triage.watch.map((item) => (
+              <Row key={item.booking.bookingId} item={item} m={m} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* --- All clear (collapsed) ---------------------------------------- */}
+      <section>
+        <details>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-stone-400 hover:text-stone-600">
+            {m.list.allClear}
+            <span className="tnum ml-2 font-normal">{triage.clear.length}</span>
+            <span className="ml-3 font-normal normal-case tracking-normal">
+              {m.list.allClearHint}
+            </span>
+          </summary>
+          <div className="mt-2 divide-y divide-stone-100 border-t border-stone-200">
+            {triage.clear.map((item) => (
+              <Row key={item.booking.bookingId} item={item} m={m} />
+            ))}
+          </div>
+        </details>
+      </section>
+
+      {/* --- Runtime capability, quiet ------------------------------------ */}
+      <p className="border-t border-stone-200 pt-4 font-mono text-[11px] leading-relaxed text-stone-400">
+        weather: Open-Meteo → fixture · ai:{" "}
+        {aiProviders.length > 0 ? aiProviders.map((p) => p.label).join(" → ") : "mock"} · sandbox:{" "}
+        {daytona.configured ? "Daytona" : "local"} · delivery:{" "}
+        {whatsapp.configured
+          ? whatsapp.realSendEnabled
+            ? `LIVE (${whatsapp.provider})`
+            : `${whatsapp.provider}, locked`
+          : "hand-off links"}
+      </p>
     </div>
   );
 }

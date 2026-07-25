@@ -1,12 +1,14 @@
 @import "tailwindcss";
 
 /*
- * Fixed light theme — a demo screen that flips with OS settings is a liability
- * on a projector. System font stack only: no network font fetch at build time.
+ * Minimal, print-like palette: warm greys, one weight of hairline border,
+ * colour reserved for risk state only. Fixed light theme — a demo screen that
+ * flips with OS settings is a liability on a projector. System font stack:
+ * no network font fetch at build time.
  */
 :root {
-  --background: #f5f6f8;
-  --foreground: #14161a;
+  --background: #fafaf9; /* stone-50 */
+  --foreground: #1c1917; /* stone-900 */
 }
 
 @theme inline {
@@ -29,4 +31,10 @@ body {
     "Yu Gothic",
     Meiryo,
     sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers line up in tables and stat rows. */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }

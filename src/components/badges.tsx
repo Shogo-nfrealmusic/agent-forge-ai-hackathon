@@ -1,121 +1,79 @@
-import type {
-  DeliveryChannel,
-  DeliveryStatus,
-  Recommendation,
-  RiskLevel,
-  StaffDecision,
-} from "@/lib/types";
+import type { DeliveryStatus, RiskLevel } from "@/lib/types";
 
-const RISK_STYLE: Record<RiskLevel, string> = {
-  low: "bg-emerald-100 text-emerald-900 ring-emerald-300",
-  medium: "bg-amber-100 text-amber-900 ring-amber-300",
-  high: "bg-rose-100 text-rose-900 ring-rose-300",
+/**
+ * Minimal status marks: a small coloured dot plus plain text. Colour is used
+ * for risk state only — everything else stays in the grey scale.
+ */
+
+const RISK_DOT: Record<RiskLevel, string> = {
+  low: "bg-emerald-600",
+  medium: "bg-amber-500",
+  high: "bg-red-600",
 };
 
-const RISK_LABEL: Record<RiskLevel, string> = {
-  low: "LOW",
-  medium: "MEDIUM",
-  high: "HIGH",
+const RISK_TEXT: Record<RiskLevel, string> = {
+  low: "text-stone-600",
+  medium: "text-amber-700",
+  high: "text-red-700",
 };
 
 export function RiskBadge({ level, size = "md" }: { level: RiskLevel; size?: "sm" | "md" }) {
-  const sizing = size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-sm";
   return (
     <span
-      className={`inline-flex items-center rounded-full font-bold tracking-wide ring-1 ${RISK_STYLE[level]} ${sizing}`}
-    >
-      {RISK_LABEL[level]}
-    </span>
-  );
-}
-
-export const RECOMMENDATION_LABEL: Record<Recommendation, string> = {
-  keep: "Go ahead as planned (keep)",
-  reschedule: "Offer another date (reschedule)",
-  plan_change: "Offer a plan or location change (plan_change)",
-  contact_staff: "Needs a staff decision (contact_staff)",
-};
-
-export const DECISION_LABEL: Record<StaffDecision, string> = {
-  approved: "Approve",
-  rejected: "Reject",
-  needs_discussion: "Needs discussion",
-};
-
-const DECISION_STYLE: Record<StaffDecision, string> = {
-  approved: "bg-emerald-100 text-emerald-900 ring-emerald-300",
-  rejected: "bg-rose-100 text-rose-900 ring-rose-300",
-  needs_discussion: "bg-sky-100 text-sky-900 ring-sky-300",
-};
-
-export function DecisionBadge({ decision }: { decision: StaffDecision }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${DECISION_STYLE[decision]}`}
-    >
-      {DECISION_LABEL[decision]}
-    </span>
-  );
-}
-
-export function AgreementBadge({ agreement }: { agreement: "agree" | "needs_check" }) {
-  if (agreement === "agree") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-300">
-        Matches the rule result
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900 ring-1 ring-amber-400">
-      NEEDS CHECK — AI and rules disagree
-    </span>
-  );
-}
-
-export function SourceBadge({ label, degraded }: { label: string; degraded?: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-[11px] ring-1 ${
-        degraded
-          ? "bg-amber-50 text-amber-900 ring-amber-300"
-          : "bg-slate-100 text-slate-600 ring-slate-300"
+      className={`inline-flex items-center gap-1.5 font-medium ${RISK_TEXT[level]} ${
+        size === "sm" ? "text-[11px]" : "text-xs"
       }`}
     >
+      <span className={`h-1.5 w-1.5 rounded-full ${RISK_DOT[level]}`} />
+      {level.toUpperCase()}
+    </span>
+  );
+}
+
+const DECISION_DOT: Record<string, string> = {
+  approved: "bg-emerald-600",
+  rejected: "bg-red-600",
+  needs_discussion: "bg-stone-400",
+};
+
+/** Label is passed in so the caller can localise it. */
+export function DecisionBadge({ decision, label }: { decision: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-700">
+      <span className={`h-1.5 w-1.5 rounded-full ${DECISION_DOT[decision] ?? "bg-stone-400"}`} />
       {label}
     </span>
   );
 }
 
-export const CHANNEL_LABEL: Record<DeliveryChannel, string> = {
-  whatsapp: "WhatsApp",
-  email: "Email",
-};
-
-const DELIVERY_STATUS_STYLE: Record<DeliveryStatus, string> = {
-  sent: "bg-emerald-100 text-emerald-900 ring-emerald-300",
-  prepared: "bg-slate-100 text-slate-700 ring-slate-300",
-  failed: "bg-rose-100 text-rose-900 ring-rose-300",
-};
-
-const DELIVERY_STATUS_LABEL: Record<DeliveryStatus, string> = {
-  sent: "Sent",
-  prepared: "Prepared (not sent)",
-  failed: "Failed",
+const DELIVERY_DOT: Record<DeliveryStatus, string> = {
+  sent: "bg-emerald-600",
+  prepared: "bg-stone-400",
+  failed: "bg-red-600",
 };
 
 export function DeliveryBadge({
-  channel,
   status,
+  label,
 }: {
-  channel: DeliveryChannel;
   status: DeliveryStatus;
+  label: string;
 }) {
   return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-700">
+      <span className={`h-1.5 w-1.5 rounded-full ${DELIVERY_DOT[status]}`} />
+      {label}
+    </span>
+  );
+}
+
+/** Quiet technical annotation (data source, latency, …). */
+export function SourceBadge({ label, degraded }: { label: string; degraded?: boolean }) {
+  return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${DELIVERY_STATUS_STYLE[status]}`}
+      className={`font-mono text-[11px] ${degraded ? "text-amber-700" : "text-stone-400"}`}
     >
-      {CHANNEL_LABEL[channel]} · {DELIVERY_STATUS_LABEL[status]}
+      {label}
     </span>
   );
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { findBooking } from "@/lib/fixtures/bookings";
 import { findLatestApproval, readAuditLogForBooking } from "@/lib/audit/store";
 import { isDecisionEntry } from "@/lib/types";
+import { getMessages } from "@/lib/i18n/server";
 import AnalysisPanel from "@/components/AnalysisPanel";
 import { DecisionBadge, DeliveryBadge, formatTimestamp } from "@/components/badges";
 
@@ -17,104 +18,92 @@ export default async function BookingDetailPage({
   const booking = findBooking(id);
   if (!booking) notFound();
 
-  const [history, approval] = await Promise.all([
-    readAuditLogForBooking(booking.bookingId),
-    findLatestApproval(booking.bookingId),
+  const [{ locale, m }, history, approval] = await Promise.all([
+    getMessages(),
+    readAuditLogForBooking(id),
+    findLatestApproval(id),
   ]);
+  const d = m.detail;
 
   return (
-    <div className="space-y-6">
-      <Link href="/" className="inline-block text-sm text-slate-600 hover:underline">
-        &larr; Back to bookings
+    <div>
+      <Link href="/" className="text-xs text-stone-500 hover:text-stone-900">
+        ← {d.back}
       </Link>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-xl font-bold tracking-tight">{booking.plan}</h1>
-          <span className="font-mono text-xs text-slate-500">{booking.bookingId}</span>
+      <div className="mt-4 flex flex-wrap items-baseline gap-x-3">
+        <h1 className="text-lg font-semibold tracking-tight">{booking.plan}</h1>
+        <span className="font-mono text-[11px] text-stone-400">{booking.bookingId}</span>
+      </div>
+
+      <dl className="mt-4 mb-8 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-stone-400">{d.when}</dt>
+          <dd className="tnum mt-0.5 font-medium">
+            {booking.date} {booking.time}
+          </dd>
         </div>
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-xs text-slate-500">When</dt>
-            <dd className="mt-0.5 font-semibold">
-              {booking.date} {booking.time}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Time zone</dt>
-            <dd className="mt-0.5 font-semibold">{booking.timezone}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Duration</dt>
-            <dd className="mt-0.5 font-semibold">{booking.durationMinutes} min</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Location</dt>
-            <dd className="mt-0.5 font-semibold">{booking.location}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Coordinates</dt>
-            <dd className="mt-0.5 font-mono text-xs">
-              {booking.latitude}, {booking.longitude}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Customer (dummy)</dt>
-            <dd className="mt-0.5 font-semibold">
-              {booking.customerName}
-              <span className="block text-xs font-normal text-slate-500">
-                {booking.customerEmail}
-              </span>
-              <span className="block text-xs font-normal text-slate-500">
-                {booking.customerPhone}
-              </span>
-            </dd>
-          </div>
-        </dl>
-      </section>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-stone-400">{d.location}</dt>
+          <dd className="mt-0.5 font-medium">{booking.location}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-stone-400">{d.duration}</dt>
+          <dd className="tnum mt-0.5 font-medium">
+            {booking.durationMinutes} {m.list.minutes} · {booking.timezone}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-stone-400">{d.customer}</dt>
+          <dd className="mt-0.5 font-medium">
+            {booking.customerName}
+            <span className="block font-mono text-[11px] font-normal text-stone-400">
+              {booking.customerEmail} · {booking.customerPhone}
+            </span>
+          </dd>
+        </div>
+      </dl>
 
-      <AnalysisPanel booking={booking} initiallyApproved={approval !== null} />
+      <AnalysisPanel booking={booking} initiallyApproved={approval !== null} locale={locale} />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="text-base font-bold">History for this booking</h2>
+      <section className="border-t border-stone-200 py-6">
+        <h2 className="text-sm font-semibold">{d.historyTitle}</h2>
         {history.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">Nothing recorded yet.</p>
+          <p className="mt-2 text-sm text-stone-400">{d.historyEmpty}</p>
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 divide-y divide-stone-100">
             {history.map((entry) => (
-              <li
-                key={entry.id}
-                className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  {isDecisionEntry(entry) ? (
-                    <DecisionBadge decision={entry.decision} />
-                  ) : (
-                    <DeliveryBadge channel={entry.channel} status={entry.status} />
-                  )}
-                  <span className="text-xs text-slate-500">
-                    {formatTimestamp(entry.recordedAt)}
-                  </span>
-                  <span className="ml-auto font-mono text-[11px] text-slate-400">
-                    {isDecisionEntry(entry)
-                      ? `rule:${entry.deterministicRiskLevel} / ai:${entry.aiRiskLevel}`
-                      : `to:${entry.destinationMasked} / ${entry.mode}`}
-                  </span>
-                </div>
-                {isDecisionEntry(entry) && entry.reason && (
-                  <p className="mt-1 text-slate-700">Reason: {entry.reason}</p>
+              <li key={entry.id} className="flex flex-wrap items-baseline gap-x-4 py-2 text-sm">
+                {isDecisionEntry(entry) ? (
+                  <DecisionBadge decision={entry.decision} label={m.decision[entry.decision]} />
+                ) : (
+                  <DeliveryBadge
+                    status={entry.status}
+                    label={`${m.channel[entry.channel]} · ${m.deliveryStatus[entry.status]}`}
+                  />
                 )}
-                {!isDecisionEntry(entry) && entry.errorReason && (
-                  <p className="mt-1 text-xs text-slate-600">{entry.errorReason}</p>
+                <span className="tnum text-xs text-stone-400">
+                  {formatTimestamp(entry.recordedAt)}
+                </span>
+                {isDecisionEntry(entry) ? (
+                  entry.reason && (
+                    <span className="text-stone-600">
+                      {d.reasonPrefix}: {entry.reason}
+                    </span>
+                  )
+                ) : (
+                  <span className="font-mono text-[11px] text-stone-400">
+                    {entry.destinationMasked} · {entry.mode}
+                  </span>
                 )}
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-3 text-xs text-slate-500">
-          See every entry in the{" "}
-          <Link href="/audit" className="underline">
-            audit log
+        <p className="mt-3 text-xs text-stone-400">
+          {d.seeAudit}{" "}
+          <Link href="/audit" className="underline underline-offset-2 hover:text-stone-700">
+            {d.auditLink}
           </Link>
           .
         </p>
