@@ -1,0 +1,15 @@
+# Never upload local environment files to a deployment.
+# Vercel injects environment variables from the project settings; shipping a
+# .env alongside the code would put the same secrets in a second place and
+# would silently override the dashboard values at runtime.
+.env
+.env.*
+!.env.example
+
+# Local audit log — decisions are not deployment artefacts.
+.data/
+
+# Local-only
+node_modules
+.next
+.git
