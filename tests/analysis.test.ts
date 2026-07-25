@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { analyzeBooking } from "@/lib/analysis";
+import { analyseBookingWindows, analyzeBooking } from "@/lib/analysis";
 import { findBooking } from "@/lib/fixtures/bookings";
 import type { Booking } from "@/lib/types";
 
@@ -80,6 +80,20 @@ describe("analyzeBooking (offline)", () => {
     );
     expect(JSON.stringify(result)).not.toContain("cancelBooking");
     expect(JSON.stringify(result)).not.toContain("refund");
+  });
+
+  it("analyses alternative windows through the separate slow path", async () => {
+    const windows = await analyseBookingWindows(findBooking("demo-booking-004") as Booking);
+    expect(windows).not.toBeNull();
+    // No AI provider in this test env, so the trusted local path is used.
+    expect(windows?.source).toBe("local-trusted");
+    expect(windows?.generatedCode).toBeNull();
+    expect(windows?.current?.start).toBe("09:00");
+  });
+
+  it("keeps the fast path free of the sandbox work", async () => {
+    const result = await analyzeBooking(findBooking("demo-booking-004") as Booking);
+    expect(result).not.toHaveProperty("windows");
   });
 
   it("still produces a full result when the weather API is broken", async () => {

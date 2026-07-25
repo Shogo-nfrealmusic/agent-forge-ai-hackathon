@@ -116,8 +116,6 @@ export interface AnalysisResult {
   analyzedAt: string;
   /** Delivery capability for this environment. Never contains credentials. */
   delivery: { providers: DeliveryProviderInfo[] };
-  /** Same-day alternative windows. Null when the day forecast was unavailable. */
-  windows: WindowAnalysis | null;
 }
 
 /* ------------------------------------------------------------------------ */

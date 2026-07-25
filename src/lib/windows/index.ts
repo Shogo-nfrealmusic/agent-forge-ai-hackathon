@@ -33,6 +33,7 @@ import { readWindowCache, windowCacheKey, writeWindowCache } from "@/lib/windows
  */
 
 const MAX_ALTERNATIVES = 3;
+const CODEGEN_TIMEOUT_MS = 60_000;
 
 function bookingStartHour(booking: Booking): number {
   return Number(booking.time.slice(0, 2));
@@ -84,7 +85,9 @@ async function analyseWindowsInSandbox(
           content: buildSandboxUserPrompt(booking.durationMinutes, startHour),
         },
       ],
-      { jsonMode: false, temperature: 0 },
+      // Writing a function takes markedly longer than emitting the small
+      // recommendation JSON, so this call gets its own, longer budget.
+      { jsonMode: false, temperature: 0, timeoutMs: CODEGEN_TIMEOUT_MS },
     );
     generatedCode = stripCodeFences(content);
   } catch (err) {
