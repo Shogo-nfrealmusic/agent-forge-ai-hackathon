@@ -105,7 +105,7 @@ async function analyseWindowsInSandbox(
     booking.durationMinutes,
     startHour,
   );
-  const run = await runPythonInSandbox(script);
+  const run = await runPythonInSandbox(script, { label: booking.bookingId });
   if (!run.ok) return { error: run.errorReason ?? "The sandbox run failed" };
 
   // 4. Validate the output shape.

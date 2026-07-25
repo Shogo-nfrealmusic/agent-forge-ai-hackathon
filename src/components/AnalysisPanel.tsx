@@ -249,11 +249,14 @@ export default function AnalysisPanel({
   const canSendViaProvider =
     Boolean(whatsappProvider?.configured) && channel === "whatsapp";
 
+  // The destination comes from the server so a DEMO_WHATSAPP_TO override is
+  // honoured. The real number never lives in the repository.
+  const targets = result.delivery.targets;
   const handoffLink =
     channel === "whatsapp"
-      ? buildWhatsAppLink(booking.customerPhone, message)
+      ? buildWhatsAppLink(targets.whatsapp, message)
       : buildMailtoLink(
-          booking.customerEmail,
+          targets.email,
           buildEmailSubject(booking.plan, booking.date),
           message,
         );
@@ -640,6 +643,13 @@ export default function AnalysisPanel({
           </p>
         ) : (
           <div className="mt-4 space-y-4">
+            {targets.overridden && (
+              <p className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-900">
+                DEMO OVERRIDE ACTIVE — messages go to the address configured in
+                DEMO_WHATSAPP_TO / DEMO_EMAIL_TO, not to the booking&apos;s fixture contact.
+              </p>
+            )}
+
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-semibold">Channel</span>
               {(["whatsapp", "email"] as DeliveryChannel[]).map((c) => (
@@ -656,7 +666,7 @@ export default function AnalysisPanel({
                   />
                   {CHANNEL_LABEL[c]}
                   <span className="font-mono text-xs text-slate-500">
-                    {c === "whatsapp" ? booking.customerPhone : booking.customerEmail}
+                    {c === "whatsapp" ? targets.whatsapp : targets.email}
                   </span>
                 </label>
               ))}

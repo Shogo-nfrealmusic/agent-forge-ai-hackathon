@@ -14,6 +14,9 @@ import {
   type WhatsAppConfig,
 } from "@/lib/delivery/whatsapp";
 import { sendEmail } from "@/lib/delivery/email";
+import { deliverMessage, destinationFor } from "@/lib/delivery";
+import { findBooking } from "@/lib/fixtures/bookings";
+import type { Booking } from "@/lib/types";
 
 const META: WhatsAppConfig = {
   provider: "meta",
@@ -302,5 +305,62 @@ describe("sendEmail — hand-off only, by design", () => {
   it("masks the destination", async () => {
     const result = await sendEmail("demo-four@example.com", "hello");
     expect(result.destinationMasked).not.toContain("demo-four");
+  });
+});
+
+describe("demo destination override", () => {
+  const booking = findBooking("demo-booking-004") as Booking;
+
+  afterEach(() => {
+    delete process.env.DEMO_WHATSAPP_TO;
+    delete process.env.DEMO_EMAIL_TO;
+  });
+
+  it("uses the fixture contact when no override is set", () => {
+    const resolved = destinationFor(booking, "whatsapp", {} as unknown as NodeJS.ProcessEnv);
+    expect(resolved.value).toBe(booking.customerPhone);
+    expect(resolved.overridden).toBe(false);
+  });
+
+  // NOTE: a real personal number must never appear in this repository — it is
+  // public. The override exists precisely so a real number can stay in .env.
+  it("uses the override when one is set", () => {
+    const resolved = destinationFor(booking, "whatsapp", {
+      DEMO_WHATSAPP_TO: "+15550199",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(resolved.value).toBe("+15550199");
+    expect(resolved.overridden).toBe(true);
+  });
+
+  it("ignores a blank override", () => {
+    const resolved = destinationFor(booking, "whatsapp", {
+      DEMO_WHATSAPP_TO: "   ",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(resolved.overridden).toBe(false);
+  });
+
+  it("keeps the channels independent", () => {
+    const env = { DEMO_WHATSAPP_TO: "+15550199" } as unknown as NodeJS.ProcessEnv;
+    expect(destinationFor(booking, "email", env).value).toBe(booking.customerEmail);
+  });
+
+  it("flags the override on the delivery result and still masks the number", async () => {
+    process.env.DEMO_WHATSAPP_TO = "+15550199";
+    const result = await deliverMessage(booking, "whatsapp", "hello");
+
+    expect(result.destinationOverridden).toBe(true);
+    expect(result.destinationMasked).not.toContain("5550199");
+    expect(JSON.stringify(result)).not.toContain("+15550199");
+  });
+
+  it("still refuses to send without a provider, override or not", async () => {
+    process.env.DEMO_WHATSAPP_TO = "+15550199";
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await deliverMessage(booking, "whatsapp", "hello");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.mode).toBe("dry_run");
   });
 });

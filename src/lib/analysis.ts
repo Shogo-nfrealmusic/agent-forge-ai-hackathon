@@ -4,7 +4,7 @@ import { getDayForecast } from "@/lib/weather/hourly";
 import { evaluateDeterministicRisk, maxRiskLevel } from "@/lib/risk/rules";
 import { getAiRecommendation } from "@/lib/ai/adapter";
 import { analyseWindows } from "@/lib/windows";
-import { describeDeliveryProviders } from "@/lib/delivery";
+import { describeDeliveryProviders, describeDeliveryTargets } from "@/lib/delivery";
 
 /**
  * The analysis is split into a fast path and a slow path, and the client
@@ -41,7 +41,10 @@ export async function analyzeBooking(booking: Booking): Promise<AnalysisResult> 
     agreement,
     effectiveRiskLevel: maxRiskLevel(deterministic.riskLevel, ai.recommendation.riskLevel),
     analyzedAt: new Date().toISOString(),
-    delivery: { providers: describeDeliveryProviders() },
+    delivery: {
+      providers: describeDeliveryProviders(),
+      targets: describeDeliveryTargets(booking),
+    },
   };
 }
 

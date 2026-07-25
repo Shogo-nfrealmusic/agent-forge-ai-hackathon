@@ -3,6 +3,7 @@ import path from "node:path";
 import type { WeatherSummary } from "@/lib/types";
 
 export const SRC_DIR = path.join(process.cwd(), "src");
+export const TESTS_DIR = path.join(process.cwd(), "tests");
 
 /** Recursively list source files under `dir` with the given extensions. */
 export async function listSourceFiles(
@@ -20,6 +21,26 @@ export async function listSourceFiles(
     }
   }
   return out;
+}
+
+/**
+ * Every file that gets committed, including the tests themselves.
+ *
+ * The tests are committed to a public repository too, so a personal phone
+ * number or an email pasted into a test case leaks exactly as badly as one in
+ * `src/`. Scanning only `src/` once let a real number through in review.
+ */
+export async function readCommittedFiles(): Promise<
+  { file: string; rel: string; content: string }[]
+> {
+  const files = [...(await listSourceFiles(SRC_DIR)), ...(await listSourceFiles(TESTS_DIR))];
+  return Promise.all(
+    files.map(async (file) => ({
+      file,
+      rel: path.relative(process.cwd(), file),
+      content: await readFile(file, "utf8"),
+    })),
+  );
 }
 
 export async function readSourceFiles(): Promise<{ file: string; rel: string; content: string }[]> {

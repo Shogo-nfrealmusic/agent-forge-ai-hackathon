@@ -32,18 +32,45 @@ const DEFAULT_TIMEOUT_S = 45;
  * sandbox is ephemeral, stops after a minute idle, and self-deletes — on top of
  * the explicit delete in the `finally` block below.
  */
-const SANDBOX_PARAMS = {
+const BASE_SANDBOX_PARAMS = {
   language: "python",
-  ephemeral: true,
   networkBlockAll: true,
   autoStopInterval: 1,
-  autoDeleteInterval: 5,
-  labels: { app: "weather-booking-agent", purpose: "ai-generated-window-analysis" },
 } as const;
+
+/**
+ * Demo mode. With DAYTONA_KEEP_SANDBOX=true the sandbox is NOT deleted after
+ * the run, so it stays visible in the Daytona dashboard — useful for showing an
+ * audience that the generated code really did execute somewhere isolated.
+ *
+ * It still auto-stops after a minute, so it is not burning compute; it only
+ * holds a slot. Leave it off outside a demo.
+ */
+export function shouldKeepSandbox(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.DAYTONA_KEEP_SANDBOX?.trim() === "true";
+}
+
+function sandboxParams(label: string, keep: boolean): Record<string, unknown> {
+  return {
+    ...BASE_SANDBOX_PARAMS,
+    // A readable name so the dashboard row is identifiable during a demo.
+    name: `wbaa-${label}`,
+    labels: {
+      app: "weather-booking-agent",
+      purpose: "ai-generated-window-analysis",
+      booking: label,
+    },
+    // Kept sandboxes must not be ephemeral, or they vanish when they stop.
+    ephemeral: !keep,
+    ...(keep ? { autoArchiveInterval: 60 } : { autoDeleteInterval: 5 }),
+  };
+}
 
 export interface DaytonaConfigInfo {
   configured: boolean;
   target?: string;
+  /** True when sandboxes are kept for inspection in the dashboard. */
+  keepSandboxes: boolean;
 }
 
 export interface SandboxRunResult {
@@ -75,6 +102,7 @@ export function describeDaytona(env: NodeJS.ProcessEnv = process.env): DaytonaCo
   return {
     configured: isDaytonaConfigured(env),
     target: env.DAYTONA_TARGET?.trim() || undefined,
+    keepSandboxes: shouldKeepSandbox(env),
   };
 }
 
@@ -89,7 +117,7 @@ export function describeDaytona(env: NodeJS.ProcessEnv = process.env): DaytonaCo
  */
 export async function runPythonInSandbox(
   code: string,
-  opts: { apiKey?: string | null; timeoutSeconds?: number } = {},
+  opts: { apiKey?: string | null; timeoutSeconds?: number; label?: string; keep?: boolean } = {},
 ): Promise<SandboxRunResult> {
   assertServerOnly();
   const startedAt = Date.now();
@@ -102,6 +130,7 @@ export async function runPythonInSandbox(
   });
 
   const apiKey = opts.apiKey !== undefined ? opts.apiKey : readDaytonaApiKey();
+  const keep = opts.keep ?? shouldKeepSandbox();
   if (!apiKey) {
     return failed("DAYTONA_API_KEY is not set, so no sandbox is available");
   }
@@ -140,7 +169,8 @@ export async function runPythonInSandbox(
         : {}),
     }) as unknown as DaytonaHandle;
 
-    sandbox = await daytona.create(SANDBOX_PARAMS);
+    const label = (opts.label ?? "run").replace(/[^a-zA-Z0-9-]/g, "-").slice(0, 40);
+    sandbox = await daytona.create(sandboxParams(label, keep));
 
     const response = await sandbox.process.codeRun(
       code,
@@ -169,12 +199,14 @@ export async function runPythonInSandbox(
     const message = err instanceof Error ? err.message : String(err);
     return failed(`Daytona sandbox failed: ${message}`);
   } finally {
-    if (daytona && sandbox) {
+    // In demo mode the sandbox is deliberately left behind so it shows up in
+    // the Daytona dashboard. Otherwise it is removed immediately.
+    if (daytona && sandbox && !keep) {
       // Best effort — never let cleanup failure surface to the caller.
       try {
         await daytona.delete(sandbox);
       } catch {
-        /* the sandbox will expire on its own */
+        /* the sandbox will expire on its own via autoDeleteInterval */
       }
     }
   }

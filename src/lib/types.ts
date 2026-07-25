@@ -115,7 +115,11 @@ export interface AnalysisResult {
   effectiveRiskLevel: RiskLevel;
   analyzedAt: string;
   /** Delivery capability for this environment. Never contains credentials. */
-  delivery: { providers: DeliveryProviderInfo[] };
+  delivery: {
+    providers: DeliveryProviderInfo[];
+    /** Where a hand-off link should point. Never a credential. */
+    targets: { whatsapp: string; email: string; overridden: boolean };
+  };
 }
 
 /* ------------------------------------------------------------------------ */
@@ -205,6 +209,8 @@ export interface DeliveryResult {
   status: DeliveryStatus;
   /** Masked destination — the full address/number is never returned or logged. */
   destinationMasked: string;
+  /** True when DEMO_WHATSAPP_TO / DEMO_EMAIL_TO replaced the fixture contact. */
+  destinationOverridden?: boolean;
   provider?: string;
   providerMessageId?: string;
   errorReason?: string;
@@ -242,6 +248,8 @@ export interface DeliveryAuditEntry extends AuditEntryBase {
   mode: DeliveryMode;
   status: DeliveryStatus;
   destinationMasked: string;
+  /** True when a demo override replaced the fixture contact. */
+  destinationOverridden?: boolean;
   /** The approved decision this delivery is attached to. Required. */
   decisionEntryId: string;
   provider?: string;

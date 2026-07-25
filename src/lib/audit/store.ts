@@ -129,6 +129,7 @@ export async function recordDelivery(input: {
     status: input.result.status,
     // The full phone/email is never written to the log — only a masked form.
     destinationMasked: input.result.destinationMasked,
+    destinationOverridden: input.result.destinationOverridden,
     provider: input.result.provider,
     providerMessageId: input.result.providerMessageId,
     errorReason: input.result.errorReason,

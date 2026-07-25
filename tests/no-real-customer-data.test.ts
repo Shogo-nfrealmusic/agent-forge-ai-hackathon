@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BOOKINGS, listBookings } from "@/lib/fixtures/bookings";
-import { readSourceFiles } from "./helpers";
+import { readCommittedFiles, readSourceFiles } from "./helpers";
 
 /**
  * No real customer data may ever exist in this repository.
@@ -56,7 +56,7 @@ describe("booking fixtures contain only dummy customer data", () => {
 
 describe("the whole source tree is free of real contact details", () => {
   it("contains no email address outside the reserved demo domains", async () => {
-    const files = await readSourceFiles();
+    const files = await readCommittedFiles();
     for (const { rel, content } of files) {
       const emails = content.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? [];
       for (const email of emails) {
@@ -70,7 +70,8 @@ describe("the whole source tree is free of real contact details", () => {
   });
 
   it("contains no phone number outside the fictional range", async () => {
-    const files = await readSourceFiles();
+    // Scans the tests too — they are committed to the same public repository.
+    const files = await readCommittedFiles();
     // Any +<country><7-14 digits> literal in the source tree. The negative
     // lookahead skips placeholder notation such as "+1-555-01XX" in comments.
     const e164 = /\+\d[\d\s-]{6,17}\d(?![\dXx])/g;
@@ -91,8 +92,30 @@ describe("the whole source tree is free of real contact details", () => {
     }
   });
 
+  it("only ever hardcodes a fictional value for the demo override", async () => {
+    // The override exists so a REAL number can live in .env instead of here.
+    // Referencing it by name is fine; giving it a real-looking value is not.
+    const files = await readCommittedFiles();
+    for (const { rel, content } of files) {
+      for (const m of content.matchAll(
+        /DEMO_(?:WHATSAPP|EMAIL)_TO\s*[=:]\s*["']([^"']+)["']/g,
+      )) {
+        const value = m[1].trim();
+        // A blank value is the "ignore an empty override" case — nothing to leak.
+        if (value === "") continue;
+        const fictional = value.includes("@")
+          ? RESERVED_DOMAINS.some((d) => value.endsWith(`@${d}`))
+          : FICTIONAL_PHONE.test(value.replace(/[\s-]/g, ""));
+        expect(
+          fictional,
+          `${rel} hardcodes a non-fictional demo destination: ${value}`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it("contains no Japanese-format landline or mobile number", async () => {
-    const files = await readSourceFiles();
+    const files = await readCommittedFiles();
     for (const { rel, content } of files) {
       expect(content, `${rel} must not contain a phone number`).not.toMatch(
         /0\d{1,4}-\d{1,4}-\d{4}/,
