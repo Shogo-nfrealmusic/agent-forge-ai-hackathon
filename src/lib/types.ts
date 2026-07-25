@@ -95,7 +95,9 @@ export type AiSource = "live" | "mock";
 export interface AiResult {
   recommendation: AiRecommendation;
   source: AiSource;
-  /** Set when the live provider failed or returned an unusable payload. */
+  /** Which provider answered, e.g. "qwen-cloud" | "gmi-cloud". Never a secret. */
+  provider?: string;
+  /** Set when a provider failed, failover happened, or the mock was used. */
   fallbackReason?: string;
   model?: string;
   latencyMs?: number;
@@ -114,6 +116,64 @@ export interface AnalysisResult {
   analyzedAt: string;
   /** Delivery capability for this environment. Never contains credentials. */
   delivery: { providers: DeliveryProviderInfo[] };
+  /** Same-day alternative windows. Null when the day forecast was unavailable. */
+  windows: WindowAnalysis | null;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Alternative shooting windows (Daytona sandbox feature)                    */
+/* ------------------------------------------------------------------------ */
+
+/** One hour of forecast for the whole booking day. */
+export interface HourlyPoint {
+  hour: number; // 0-23, local to the booking timezone
+  time: string; // "HH:MM"
+  precipitationProbability: number;
+  precipitationMm: number;
+  windSpeedKmh: number;
+  windGustKmh: number;
+  temperatureC: number;
+  weatherCode: number;
+}
+
+export interface DayForecast {
+  source: WeatherSource;
+  degraded: boolean;
+  fallbackReason?: string;
+  date: string;
+  hours: HourlyPoint[];
+}
+
+export interface ShootingWindow {
+  start: string; // "HH:MM"
+  end: string; // "HH:MM"
+  precipitationProbabilityMax: number;
+  windSpeedMaxKmh: number;
+  temperatureC: number;
+  /** Lower is better. Comparable only within one analysis. */
+  score: number;
+  riskLevel: RiskLevel;
+}
+
+/**
+ * Where the window analysis was computed.
+ *   daytona-sandbox : the model wrote Python and it ran inside a Daytona sandbox
+ *   local-trusted   : our own hand-written implementation (no generated code ran)
+ */
+export type WindowAnalysisSource = "daytona-sandbox" | "local-trusted";
+
+export interface WindowAnalysis {
+  source: WindowAnalysisSource;
+  /** The booking's own window, scored on the same scale. */
+  current: ShootingWindow | null;
+  /** Best alternative on the same day, or null if nothing is better. */
+  best: ShootingWindow | null;
+  alternatives: ShootingWindow[];
+  /** Set when the sandbox path was unavailable or failed. */
+  fallbackReason?: string;
+  /** The Python the model wrote. Shown in the UI; null on the local path. */
+  generatedCode?: string | null;
+  executionMs?: number;
 }
 
 /* ------------------------------------------------------------------------ */

@@ -23,10 +23,29 @@ import { isDecisionEntry } from "@/lib/types";
  * in the delivery adapter, and its outcome is passed in here as data.
  */
 
-const DEFAULT_LOG_PATH = path.join(process.cwd(), ".data", "audit-log.jsonl");
-
+/**
+ * Where the log lives.
+ *
+ * Locally this is ./.data/audit-log.jsonl. On a serverless host the project
+ * directory is read-only, so we fall back to /tmp — which is writable but
+ * EPHEMERAL and per-instance. That is acceptable for a demo and is called out
+ * in docs/security.md; a real deployment must point this at a database.
+ */
 function logPath(): string {
-  return process.env.AUDIT_LOG_PATH?.trim() || DEFAULT_LOG_PATH;
+  const override = process.env.AUDIT_LOG_PATH?.trim();
+  if (override) return override;
+
+  const serverless = process.env.VERCEL === "1" || process.env.AWS_LAMBDA_FUNCTION_NAME;
+  const root = serverless ? "/tmp" : path.join(process.cwd(), ".data");
+  return path.join(root, "audit-log.jsonl");
+}
+
+/** True when decisions will not survive a cold start. Surfaced in the UI. */
+export function isAuditLogEphemeral(): boolean {
+  return (
+    !process.env.AUDIT_LOG_PATH?.trim() &&
+    (process.env.VERCEL === "1" || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME))
+  );
 }
 
 const DECISION_NOTES: Record<StaffDecision, string> = {

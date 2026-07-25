@@ -8,7 +8,13 @@ import { makeWeather } from "./helpers";
 const booking = findBooking("demo-booking-004") as Booking;
 const weather = makeWeather({ precipitationProbabilityMax: 85, weatherCodes: [65] });
 const deterministic = evaluateDeterministicRisk(weather);
-const config = { apiKey: "test-key-not-real", baseUrl: "https://example.invalid/v1", model: "test" };
+const config = {
+  id: "qwen-cloud" as const,
+  label: "Qwen Cloud",
+  apiKey: "test-key-not-real",
+  baseUrl: "https://example.invalid/v1",
+  model: "test",
+};
 
 function chatResponse(content: unknown) {
   return {
@@ -42,7 +48,13 @@ describe("readAiConfig", () => {
       AI_BASE_URL: "https://example.invalid/v1/",
       AI_MODEL: "qwen-max",
     } as unknown as NodeJS.ProcessEnv);
-    expect(cfg).toEqual({ apiKey: "k", baseUrl: "https://example.invalid/v1", model: "qwen-max" });
+    expect(cfg).toEqual({
+      id: "qwen-cloud",
+      label: "Qwen Cloud",
+      apiKey: "k",
+      baseUrl: "https://example.invalid/v1",
+      model: "qwen-max",
+    });
   });
 
   it("never reads a NEXT_PUBLIC_ variable", () => {
@@ -60,7 +72,7 @@ describe("getAiRecommendation — fallback to mock", () => {
     const result = await getAiRecommendation(booking, weather, deterministic, { config: null });
 
     expect(result.source).toBe("mock");
-    expect(result.fallbackReason).toContain("AI_API_KEY");
+    expect(result.fallbackReason).toContain("No AI provider is configured");
     expect(fetchSpy).not.toHaveBeenCalled(); // no network without a key
     expect(result.recommendation.customerMessage.length).toBeGreaterThan(0);
   });
@@ -69,7 +81,7 @@ describe("getAiRecommendation — fallback to mock", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
     const result = await getAiRecommendation(booking, weather, deterministic, { config });
     expect(result.source).toBe("mock");
-    expect(result.fallbackReason).toContain("Could not reach the AI provider");
+    expect(result.fallbackReason).toContain("Could not reach");
   });
 
   it("falls back to mock on a non-2xx response without leaking the body", async () => {

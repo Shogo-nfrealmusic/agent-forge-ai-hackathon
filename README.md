@@ -10,6 +10,17 @@ message for the customer. **A staff member decides. The agent never does.**
 
 ---
 
+## Partner stack
+
+| Partner | How it is used | Without a key |
+|---|---|---|
+| **Qwen Cloud** | Primary AI provider (DashScope OpenAI-compatible mode) — risk assessment, customer message, and the generated analysis code | mock adapter |
+| **GMI Cloud** | Automatic AI failover when Qwen Cloud errors or returns an off-schema payload | skipped |
+| **Daytona** | Runs the **AI-generated Python** that ranks alternative shooting windows, in an isolated sandbox — never on our server | trusted local implementation |
+| Open-Meteo | Hourly forecast (no key required) | fixture weather |
+
+Everything degrades instead of breaking: with nothing configured the whole app still runs.
+
 ## What it does
 
 1. Lists mock bookings
@@ -17,9 +28,11 @@ message for the customer. **A staff member decides. The agent never does.**
 3. Scores the risk as **Low / Medium / High** using deterministic rules — no AI involved
 4. Asks an AI for an assessment, a recommended action and a draft customer message
 5. Shows both results side by side, and flags **NEEDS CHECK** when they disagree
-6. Lets a staff member choose **Approve / Reject / Needs discussion**
-7. Records the decision in a local append-only audit log
-8. **After an approval**, lets the staff member send the message over WhatsApp or email
+6. Asks the model to **write a Python ranking function**, runs it in a **Daytona sandbox**, and
+   reports the best alternative slot on the same day
+7. Lets a staff member choose **Approve / Reject / Needs discussion**
+8. Records the decision in a local append-only audit log
+9. **After an approval**, lets the staff member send the message over WhatsApp or email
 
 The AI never decides anything on its own, and no message can reach a customer without a staff
 approval already on record.
@@ -38,7 +51,7 @@ npm run dev                  # http://localhost:3000
 |---|---|
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build |
-| `npm test` | Run the test suite (vitest, 163 tests) |
+| `npm test` | Run the test suite (vitest, 218 tests) |
 | `npm run typecheck` | Type-check without emitting |
 
 A five-minute demo script is in [`docs/demo.md`](docs/demo.md).
@@ -54,6 +67,10 @@ All of these are read **server-side only**. None may ever be prefixed with `NEXT
 | `AI_API_KEY` | no | *(empty)* | Unset → the mock AI adapter is used |
 | `AI_BASE_URL` | no | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | Any OpenAI-compatible endpoint (Qwen Cloud by default) |
 | `AI_MODEL` | no | `qwen-plus` | Model name |
+| `GMI_API_KEY` | no | *(empty)* | GMI Cloud — AI failover provider |
+| `GMI_BASE_URL` / `GMI_MODEL` | no | `https://api.gmi-serving.com/v1` | GMI Cloud endpoint and model |
+| `DAYTONA_API_KEY` | no | *(empty)* | Unset → generated code is not run; the trusted local analysis is used |
+| `DAYTONA_TARGET` | no | — | Optional Daytona region/target |
 | `WEATHER_USE_LIVE` | no | `true` | `false` forces the fixture path (fully offline) |
 | `DELIVERY_ALLOW_REAL_SEND` | no | `false` | **Master kill switch.** Unless exactly `"true"`, provider calls are simulated |
 | `WHATSAPP_PROVIDER` | no | *(empty)* | `meta` or `twilio`. Empty → hand-off links only |
@@ -101,6 +118,24 @@ fails validation is discarded and the mock adapter takes over.
 
 ---
 
+## Alternative shooting windows (the Daytona feature)
+
+Instead of only saying "it will rain", the agent answers **"is there a better slot today?"**
+
+1. The full-day hourly forecast is fetched from Open-Meteo
+2. The model is asked to **write** `analyze(hours, duration_minutes, booking_start_hour)` in Python
+3. The generated code is statically screened (no `os`, `subprocess`, `socket`, `eval`, `open`, …)
+4. It runs **inside a Daytona sandbox** — never on this server
+5. The sandbox returns **only candidate start hours**; every number shown to a staff member is
+   recomputed here from the real forecast, so the sandbox cannot invent a favourable answer
+
+**Generated code is never executed outside a sandbox.** There is no local `eval` path anywhere in
+this codebase. Without `DAYTONA_API_KEY` we do not run the model's code at all — we use our own
+hand-written implementation instead, and the UI says so.
+
+The result turns a vague message into a concrete one:
+*"09:00-10:00 has an 85% chance of rain, but 16:00-17:00 is at 5%."*
+
 ## Sending the message to the customer
 
 Two paths, both requiring an approved decision first.
@@ -139,7 +174,11 @@ the message **length only** — the body is never stored.
 | Failure | What happens |
 |---|---|
 | `AI_API_KEY` not set | Mock adapter, badge shown in the UI |
-| AI provider unreachable / times out | Falls back to mock, reason shown in the UI |
+| Qwen Cloud unreachable / errors | Automatic failover to GMI Cloud, then mock |
+| Both AI providers fail | Mock adapter, reason shown in the UI |
+| `DAYTONA_API_KEY` not set | Generated code is not run; trusted local window analysis |
+| Sandbox fails, times out, or returns junk | Trusted local window analysis, reason shown in the UI |
+| Generated code fails the safety screen | Rejected before the sandbox; trusted local analysis |
 | AI returns a non-2xx | Falls back to mock (the response body is never surfaced — it can echo the key) |
 | AI returns non-JSON or an off-schema payload | Falls back to mock |
 | Weather API fails or the date is out of range | Falls back to fixture weather, `degraded` badge shown |
@@ -170,11 +209,13 @@ src/
     ├── analysis.ts               Orchestration
     ├── risk/rules.ts             Deterministic rules
     ├── weather/open-meteo.ts     Weather adapter + fallback
-    ├── ai/{adapter,schema,mock,prompt}.ts    AI adapter
+    ├── ai/{adapter,providers,schema,mock,prompt}.ts   AI provider chain
+    ├── windows/{index,local,codegen}.ts       Alternative-window analysis
+    ├── sandbox/daytona.ts                     Daytona sandbox adapter
     ├── delivery/{contact,whatsapp,email}.ts  Delivery adapters
     ├── audit/store.ts            Append-only audit log
     └── fixtures/{bookings,weather}.ts
-tests/                            vitest (163 tests)
+tests/                            vitest (218 tests)
 docs/{architecture,security,demo}.md
 ```
 
@@ -200,6 +241,9 @@ What is covered:
 - No real customer data anywhere (emails, phone numbers, postal codes — whole source tree)
 - No secret can reach the browser (`"use client"` modules cannot read `process.env`)
 - Malformed AI responses are handled safely (13 shapes)
+- Generated code is rejected when it imports `os`/`subprocess`/`socket` or calls `eval`/`exec`/`open`
+- The sandbox result is re-derived from the real forecast, so invented hours are dropped
+- AI provider failover (Qwen Cloud → GMI Cloud → mock), with neither key leaking into a URL or body
 - The app only reaches hosts it documents
 
 ---

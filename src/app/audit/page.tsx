@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { readAuditLog } from "@/lib/audit/store";
+import { isAuditLogEphemeral, readAuditLog } from "@/lib/audit/store";
 import { isDecisionEntry } from "@/lib/types";
 import {
   DecisionBadge,
@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AuditPage() {
   const entries = await readAuditLog();
+  const ephemeral = isAuditLogEphemeral();
 
   return (
     <div className="space-y-5">
@@ -25,6 +26,14 @@ export default async function AuditPage() {
           Destinations are masked and message bodies are never stored — only their length.
         </p>
       </section>
+
+      {ephemeral && (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          This deployment writes the log to <code className="font-mono">/tmp</code>, which is
+          ephemeral and per-instance on serverless hosting — entries can disappear on a cold start.
+          A real deployment must point the audit log at a database. See docs/security.md.
+        </p>
+      )}
 
       {entries.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">

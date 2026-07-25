@@ -169,10 +169,12 @@ describe("no booking, payment or unexpected messaging integration", () => {
     }
   });
 
-  it("only reaches the three hosts this app is documented to use", async () => {
+  it("only reaches hosts this app documents", async () => {
     const files = await readSourceFiles();
     const allowedHosts = [
       "api.open-meteo.com", // weather
+      "api.gmi-serving.com", // GMI Cloud inference (AI failover)
+      "www.daytona.io", // docs link in a comment
       "graph.facebook.com", // WhatsApp Cloud API
       "api.twilio.com", // Twilio WhatsApp
       "wa.me", // click-to-chat hand-off link (not a server call)

@@ -82,6 +82,7 @@ export default function AnalysisPanel({
   } | null>(null);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showCode, setShowCode] = useState(false);
 
   const runAnalysis = useCallback(async () => {
     setPhase("loading");
@@ -327,7 +328,11 @@ export default function AnalysisPanel({
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <SourceBadge
-              label={ai.source === "live" ? `ai: live (${ai.model ?? "model"})` : "ai: mock"}
+              label={
+                ai.source === "live"
+                  ? `ai: ${ai.provider ?? "live"} (${ai.model ?? "model"})`
+                  : "ai: mock"
+              }
               degraded={ai.source === "mock"}
             />
             <SourceBadge label={`confidence: ${ai.recommendation.confidence.toFixed(2)}`} />
@@ -414,6 +419,117 @@ export default function AnalysisPanel({
           </div>
         )}
       </section>
+
+      {/* --- Alternative windows (Daytona sandbox) ---------------------- */}
+      {result.windows && (
+        <section className="rounded-lg border border-slate-200 bg-white p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-bold">Better slot on the same day?</h2>
+            <SourceBadge
+              label={
+                result.windows.source === "daytona-sandbox"
+                  ? "computed in a Daytona sandbox"
+                  : "computed locally (trusted code)"
+              }
+              degraded={result.windows.source === "local-trusted"}
+            />
+            {result.windows.executionMs !== undefined && (
+              <SourceBadge label={`sandbox: ${result.windows.executionMs} ms`} />
+            )}
+          </div>
+
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            The model writes a Python ranking function and it runs inside an isolated Daytona
+            sandbox — never on this server. If no sandbox is available we fall back to our own
+            hand-written implementation; generated code is never executed outside a sandbox.
+            Every figure below is recomputed here from the real forecast, so the sandbox cannot
+            invent a favourable answer.
+          </p>
+
+          {result.windows.fallbackReason && (
+            <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {result.windows.fallbackReason}
+            </p>
+          )}
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Currently booked</p>
+              {result.windows.current ? (
+                <>
+                  <p className="mt-1 text-lg font-bold">
+                    {result.windows.current.start}&ndash;{result.windows.current.end}
+                  </p>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+                    <RiskBadge level={result.windows.current.riskLevel} size="sm" />
+                    <span>{result.windows.current.precipitationProbabilityMax}% rain</span>
+                    <span>{result.windows.current.windSpeedMaxKmh} km/h</span>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-slate-500">Not in the forecast range</p>
+              )}
+            </div>
+
+            <div
+              className={`rounded border p-3 ${
+                result.windows.best
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-slate-200 bg-slate-50"
+              }`}
+            >
+              <p className="text-xs text-slate-500">Best alternative</p>
+              {result.windows.best ? (
+                <>
+                  <p className="mt-1 text-lg font-bold text-emerald-900">
+                    {result.windows.best.start}&ndash;{result.windows.best.end}
+                  </p>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-emerald-900">
+                    <RiskBadge level={result.windows.best.riskLevel} size="sm" />
+                    <span>{result.windows.best.precipitationProbabilityMax}% rain</span>
+                    <span>{result.windows.best.windSpeedMaxKmh} km/h</span>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-slate-600">
+                  Nothing meaningfully better on this day.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {result.windows.alternatives.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="text-slate-500">Ranked:</span>
+              {result.windows.alternatives.map((w) => (
+                <span
+                  key={w.start}
+                  className="rounded bg-slate-100 px-2 py-0.5 font-mono text-slate-700 ring-1 ring-slate-300"
+                >
+                  {w.start}&ndash;{w.end} · {w.precipitationProbabilityMax}%
+                </span>
+              ))}
+            </div>
+          )}
+
+          {result.windows.generatedCode && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setShowCode((v) => !v)}
+                className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {showCode ? "Hide" : "Show"} the Python the model wrote
+              </button>
+              {showCode && (
+                <pre className="mt-2 max-h-72 overflow-auto rounded border border-slate-200 bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100">
+                  {result.windows.generatedCode}
+                </pre>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* --- Customer message + delivery -------------------------------- */}
       <section

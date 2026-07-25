@@ -53,7 +53,8 @@ This structurally prevents the failure mode "the AI said Low, so we went ahead i
 | Adapter | Primary | Fallback | How you can tell |
 |---|---|---|---|
 | weather | Open-Meteo | fixture weather | `weather.source` / `weather.degraded` |
-| ai | OpenAI-compatible API | mock adapter | `ai.source` / `ai.fallbackReason` |
+| ai | Qwen Cloud | GMI Cloud, then mock | `ai.provider` / `ai.source` / `ai.fallbackReason` |
+| window analysis | Daytona sandbox | trusted local code | `windows.source` / `windows.fallbackReason` |
 | delivery | Meta / Twilio | dry run + hand-off link | `result.mode` |
 
 None of them throw. Callers always receive a usable value. With `WEATHER_USE_LIVE=false` and no

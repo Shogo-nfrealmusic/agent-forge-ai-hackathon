@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { listBookings } from "@/lib/fixtures/bookings";
-import { isAiConfigured } from "@/lib/ai/adapter";
+import { describeAiProviders } from "@/lib/ai/providers";
 import { describeWhatsAppProvider } from "@/lib/delivery/whatsapp";
+import { describeDaytona } from "@/lib/sandbox/daytona";
 
 // The capability badges reflect the runtime environment, not build time.
 export const dynamic = "force-dynamic";
@@ -9,8 +10,10 @@ export const dynamic = "force-dynamic";
 /** Booking list. Server component — reads fixtures only, no network. */
 export default function BookingListPage() {
   const bookings = listBookings();
-  const aiConfigured = isAiConfigured();
+  const aiProviders = describeAiProviders();
   const whatsapp = describeWhatsAppProvider();
+  const daytona = describeDaytona();
+  const liveAi = aiProviders.filter((p) => p.configured);
 
   const deliveryLabel = !whatsapp.configured
     ? "delivery: link hand-off only"
@@ -38,12 +41,24 @@ export default function BookingListPage() {
         </span>
         <span
           className={`rounded px-2.5 py-1 font-mono ring-1 ${
-            aiConfigured
+            liveAi.length > 0
               ? "bg-white text-slate-600 ring-slate-300"
               : "bg-amber-50 text-amber-900 ring-amber-300"
           }`}
         >
-          ai: {aiConfigured ? "live (OpenAI-compatible)" : "mock (AI_API_KEY not set)"}
+          ai:{" "}
+          {liveAi.length > 0
+            ? liveAi.map((p) => p.label).join(" → ")
+            : "mock (no provider key set)"}
+        </span>
+        <span
+          className={`rounded px-2.5 py-1 font-mono ring-1 ${
+            daytona.configured
+              ? "bg-white text-slate-600 ring-slate-300"
+              : "bg-amber-50 text-amber-900 ring-amber-300"
+          }`}
+        >
+          sandbox: {daytona.configured ? "Daytona" : "local trusted code"}
         </span>
         <span
           className={`rounded px-2.5 py-1 font-mono ring-1 ${

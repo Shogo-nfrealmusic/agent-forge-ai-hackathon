@@ -77,8 +77,9 @@ if that changes — the gates, audit records and masking around it need no modif
 
 ### Rules
 
-- `AI_API_KEY` and the WhatsApp/Twilio credentials are read **only** in server-only modules under
-  `src/lib/ai/`, `src/lib/delivery/` and `src/app/api/`
+- `AI_API_KEY`, `GMI_API_KEY`, `DAYTONA_API_KEY` and the WhatsApp/Twilio credentials are read
+  **only** in server-only modules under `src/lib/ai/`, `src/lib/delivery/`, `src/lib/sandbox/`
+  and `src/app/api/`
 - No credential is ever given a `NEXT_PUBLIC_` prefix (Next.js inlines those into the browser
   bundle)
 - No `"use client"` module reads `process.env`
@@ -134,6 +135,40 @@ pseudonymous id first. See Phase 1 in [`architecture.md`](architecture.md).
 
 ---
 
+## 4b. AI-generated code runs only in a sandbox
+
+The agent asks the model to **write Python**. That code is treated as hostile.
+
+### The rule
+
+> Generated code is executed **only inside a Daytona sandbox**. If no sandbox is available it is
+> not executed at all — we fall back to our own hand-written implementation.
+
+There is no `eval`, no `new Function`, no `child_process` and no local Python execution anywhere in
+this codebase. The fallback path (`src/lib/windows/local.ts`) is code we wrote.
+
+### Layers
+
+| Layer | What it does |
+|---|---|
+| Prompt constraints | One function, standard library only, no I/O, no network |
+| Static screen (`checkGeneratedCode`) | Rejects `os` / `sys` / `subprocess` / `socket` / `urllib` / `pickle` / `ctypes` imports, and `eval` / `exec` / `open` / `compile` / `__import__` / `globals()` |
+| Our harness, not the model's | We inject the input and print the output; the model only supplies `analyze(...)` |
+| Isolation | Execution happens in a fresh Daytona sandbox with its own kernel and filesystem, deleted afterwards |
+| Narrow output contract | The sandbox returns **only start hours** — never numbers |
+| Re-derivation | Every figure shown to a staff member is recomputed from the real forecast; hours that do not form a real window are dropped |
+
+That last point matters most: even a fully compromised sandbox cannot make a stormy slot look
+clear, because it never gets to supply a single weather figure.
+
+### Tests (`tests/windows.test.ts`)
+
+Eight forbidden-construct variants are rejected; five malformed sandbox outputs are rejected
+safely; the local path is asserted to return `generatedCode: null`; and a failing model call or an
+unsafe script is shown to fall back to the trusted implementation.
+
+---
+
 ## 5. AI output is treated as untrusted input
 
 | Control | Implementation |
@@ -178,7 +213,9 @@ safely, without throwing.
 - **No authentication**, so there is no `actor` field recording *who* approved something. This is
   mandatory before real use.
 - No tamper-evidence (hash chaining) on the log.
-- On serverless hosting the filesystem is ephemeral; the log must move to a database.
+- On serverless hosting the filesystem is ephemeral. The store detects this and writes to `/tmp`,
+  and the audit screen shows a warning — but entries still disappear on a cold start. A real
+  deployment must move the log to a database.
 
 ---
 
@@ -187,7 +224,9 @@ safely, without throwing.
 | Host | Purpose | Auth | How to disable |
 |---|---|---|---|
 | `api.open-meteo.com` | Weather forecast | none | `WEATHER_USE_LIVE=false` |
-| `AI_BASE_URL` (default DashScope) | Generate the recommendation | Bearer token | leave `AI_API_KEY` empty |
+| `AI_BASE_URL` (default DashScope / Qwen Cloud) | Generate the recommendation and the analysis code | Bearer token | leave `AI_API_KEY` empty |
+| `api.gmi-serving.com` | GMI Cloud AI failover | Bearer token | leave `GMI_API_KEY` empty |
+| Daytona API | Run generated code in a sandbox | Bearer token | leave `DAYTONA_API_KEY` empty |
 | `graph.facebook.com` | WhatsApp Cloud API | Bearer token | leave `WHATSAPP_PROVIDER` empty |
 | `api.twilio.com` | Twilio WhatsApp | Basic auth | leave `WHATSAPP_PROVIDER` empty |
 
