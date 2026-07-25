@@ -20,17 +20,17 @@ export async function POST(request: Request) {
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json({ error: "リクエストボディが不正です" }, { status: 400 });
+    return NextResponse.json({ error: "The request body is not valid JSON" }, { status: 400 });
   }
 
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "bookingId が必要です" }, { status: 400 });
+    return NextResponse.json({ error: "bookingId is required" }, { status: 400 });
   }
 
   const booking = findBooking(parsed.data.bookingId);
   if (!booking) {
-    return NextResponse.json({ error: "予約が見つかりません" }, { status: 404 });
+    return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
   try {
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     // analyzeBooking has internal fallbacks; this is a last-resort guard.
     console.error("[analyze] unexpected failure", err);
     return NextResponse.json(
-      { error: "解析中に予期しないエラーが発生しました。時間をおいて再実行してください。" },
+      { error: "Something went wrong while analysing this booking. Please try again." },
       { status: 500 },
     );
   }

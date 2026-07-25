@@ -2,8 +2,12 @@
  * Shared domain types for the Weather Booking Adjustment Agent.
  *
  * SAFETY NOTE: This prototype is read-only with respect to any booking system.
- * There is no type in this file representing a booking mutation, and none must
- * be added without an explicit human-approval + audit design.
+ * There is no type here representing a booking mutation, and none must be added
+ * without an explicit human-approval + audit design.
+ *
+ * Outbound messaging (WhatsApp / email) IS modelled, but it is gated: a message
+ * can only be delivered for a booking that already has an `approved` decision,
+ * and real sending stays off unless DELIVERY_ALLOW_REAL_SEND=true.
  */
 
 export type RiskLevel = "low" | "medium" | "high";
@@ -29,6 +33,8 @@ export interface Booking {
   plan: string;
   customerName: string; // dummy only — see tests/no-real-customer-data.test.ts
   customerEmail: string; // dummy only — must be @example.com
+  /** Dummy only — must be in the +1-555-01XX range reserved for fiction. */
+  customerPhone: string; // E.164
   notes?: string;
 }
 
@@ -106,12 +112,61 @@ export interface AnalysisResult {
   /** Highest of deterministic / AI level — used for the "act on the worse case" banner. */
   effectiveRiskLevel: RiskLevel;
   analyzedAt: string;
+  /** Delivery capability for this environment. Never contains credentials. */
+  delivery: { providers: DeliveryProviderInfo[] };
 }
 
-export interface AuditEntry {
+/* ------------------------------------------------------------------------ */
+/* Outbound delivery                                                         */
+/* ------------------------------------------------------------------------ */
+
+export type DeliveryChannel = "whatsapp" | "email";
+
+export type DeliveryMode =
+  /** A deep link was produced; the staff member sends from their own client. */
+  | "link_handoff"
+  /** A provider call was simulated — nothing left this machine. */
+  | "dry_run"
+  /** A real provider API call was made. */
+  | "provider_api";
+
+export type DeliveryStatus = "prepared" | "sent" | "failed";
+
+export interface DeliveryProviderInfo {
+  channel: DeliveryChannel;
+  /** "meta" | "twilio" | null (null = no provider configured) */
+  provider: string | null;
+  configured: boolean;
+  /** Master kill switch. False → provider calls are simulated, never sent. */
+  realSendEnabled: boolean;
+}
+
+export interface DeliveryResult {
+  channel: DeliveryChannel;
+  mode: DeliveryMode;
+  status: DeliveryStatus;
+  /** Masked destination — the full address/number is never returned or logged. */
+  destinationMasked: string;
+  provider?: string;
+  providerMessageId?: string;
+  errorReason?: string;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Audit log                                                                 */
+/* ------------------------------------------------------------------------ */
+
+interface AuditEntryBase {
   id: string;
   recordedAt: string;
   bookingId: string;
+  /** Always false — no booking system is ever mutated by this prototype. */
+  bookingSystemMutated: false;
+  note: string;
+}
+
+export interface DecisionAuditEntry extends AuditEntryBase {
+  kind: "decision";
   decision: StaffDecision;
   /** Free-text reason. Required for `rejected`. */
   reason: string | null;
@@ -121,7 +176,29 @@ export interface AuditEntry {
   agreement: AgreementStatus;
   weatherSource: WeatherSource;
   aiSource: AiSource;
-  /** Always false in this prototype — no booking system is ever mutated. */
-  bookingSystemMutated: false;
-  note: string;
+}
+
+export interface DeliveryAuditEntry extends AuditEntryBase {
+  kind: "delivery";
+  channel: DeliveryChannel;
+  mode: DeliveryMode;
+  status: DeliveryStatus;
+  destinationMasked: string;
+  /** The approved decision this delivery is attached to. Required. */
+  decisionEntryId: string;
+  provider?: string;
+  providerMessageId?: string;
+  errorReason?: string;
+  /** Length only — the message body is never written to the audit log. */
+  messageLength: number;
+}
+
+export type AuditEntry = DecisionAuditEntry | DeliveryAuditEntry;
+
+export function isDecisionEntry(entry: AuditEntry): entry is DecisionAuditEntry {
+  return entry.kind === "decision";
+}
+
+export function isDeliveryEntry(entry: AuditEntry): entry is DeliveryAuditEntry {
+  return entry.kind === "delivery";
 }

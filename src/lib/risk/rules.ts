@@ -4,7 +4,7 @@ import type { DeterministicRisk, RiskLevel, RuleHit, WeatherSummary } from "@/li
  * Deterministic weather-risk rules.
  *
  * These rules are the source of truth. The AI never overrides them — it only
- * runs alongside them, and any disagreement surfaces as "要確認" in the UI.
+ * runs alongside them, and any disagreement surfaces as "NEEDS CHECK" in the UI.
  *
  * Rule set (as specified):
  *   - precipitation probability >= 70%  -> medium
@@ -41,8 +41,8 @@ export function evaluateDeterministicRisk(weather: WeatherSummary): Deterministi
     hits.push({
       id: "severe-alert",
       level: "high",
-      label: "警報・注意報",
-      detail: `発表中: ${weather.alerts.join(" / ")}`,
+      label: "Severe weather warning",
+      detail: `Active: ${weather.alerts.join(" / ")}`,
     });
   }
 
@@ -52,8 +52,8 @@ export function evaluateDeterministicRisk(weather: WeatherSummary): Deterministi
     hits.push({
       id: "thunderstorm",
       level: "high",
-      label: "雷雨",
-      detail: `WMO weather code ${thunderCodes.join(", ")} を検出`,
+      label: "Thunderstorm",
+      detail: `WMO weather code ${thunderCodes.join(", ")} detected`,
     });
   }
 
@@ -63,8 +63,8 @@ export function evaluateDeterministicRisk(weather: WeatherSummary): Deterministi
     hits.push({
       id: "strong-wind",
       level: "high",
-      label: "強風",
-      detail: `最大風速 ${wind} km/h (>= ${THRESHOLDS.windHighKmh} km/h)`,
+      label: "Strong wind",
+      detail: `Max wind ${wind} km/h (>= ${THRESHOLDS.windHighKmh} km/h)`,
     });
   }
 
@@ -74,15 +74,15 @@ export function evaluateDeterministicRisk(weather: WeatherSummary): Deterministi
     hits.push({
       id: "precip-high",
       level: "high",
-      label: "降水確率(高)",
-      detail: `降水確率 ${pop}% (>= ${THRESHOLDS.precipProbHigh}%)`,
+      label: "Precipitation probability (high)",
+      detail: `${pop}% chance of rain (>= ${THRESHOLDS.precipProbHigh}%)`,
     });
   } else if (pop >= THRESHOLDS.precipProbMedium) {
     hits.push({
       id: "precip-medium",
       level: "medium",
-      label: "降水確率(中)",
-      detail: `降水確率 ${pop}% (>= ${THRESHOLDS.precipProbMedium}%)`,
+      label: "Precipitation probability (medium)",
+      detail: `${pop}% chance of rain (>= ${THRESHOLDS.precipProbMedium}%)`,
     });
   }
 
@@ -90,8 +90,8 @@ export function evaluateDeterministicRisk(weather: WeatherSummary): Deterministi
 
   const reason =
     hits.length === 0
-      ? `該当ルールなし（降水確率 ${pop}% / 風速 ${wind} km/h）。ルール上は撮影可能。`
-      : hits.map((h) => `${h.label}: ${h.detail}`).join(" ／ ");
+      ? `No rule triggered (${pop}% chance of rain, ${wind} km/h wind). The shoot can go ahead as far as the rules are concerned.`
+      : hits.map((h) => `${h.label}: ${h.detail}`).join(" | ");
 
   return { riskLevel, hits, reason };
 }

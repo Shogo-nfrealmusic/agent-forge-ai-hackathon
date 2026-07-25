@@ -19,7 +19,7 @@ const FIXTURES: Record<string, FixtureWeather> = {
     windGustMaxKmh: 19,
     temperatureC: 31,
     weatherCodes: [1],
-    conditionLabel: "概ね晴れ",
+    conditionLabel: "Mostly sunny",
     alerts: [],
   },
   "demo-booking-002": {
@@ -31,7 +31,7 @@ const FIXTURES: Record<string, FixtureWeather> = {
     windGustMaxKmh: 26,
     temperatureC: 28,
     weatherCodes: [3, 61],
-    conditionLabel: "曇り時々弱い雨",
+    conditionLabel: "Cloudy with light rain at times",
     alerts: [],
   },
   "demo-booking-003": {
@@ -43,7 +43,7 @@ const FIXTURES: Record<string, FixtureWeather> = {
     windGustMaxKmh: 28,
     temperatureC: 27,
     weatherCodes: [63],
-    conditionLabel: "雨",
+    conditionLabel: "Rain",
     alerts: [],
   },
   "demo-booking-004": {
@@ -55,7 +55,7 @@ const FIXTURES: Record<string, FixtureWeather> = {
     windGustMaxKmh: 29,
     temperatureC: 26,
     weatherCodes: [65],
-    conditionLabel: "強い雨",
+    conditionLabel: "Heavy rain",
     alerts: [],
   },
   "demo-booking-005": {
@@ -67,7 +67,7 @@ const FIXTURES: Record<string, FixtureWeather> = {
     windGustMaxKmh: 29,
     temperatureC: 30,
     weatherCodes: [95],
-    conditionLabel: "雷雨",
+    conditionLabel: "Thunderstorm",
     alerts: [],
   },
   "demo-booking-006": {
@@ -79,8 +79,8 @@ const FIXTURES: Record<string, FixtureWeather> = {
     windGustMaxKmh: 61,
     temperatureC: 29,
     weatherCodes: [3, 80],
-    conditionLabel: "強風・にわか雨",
-    alerts: ["台風接近に伴う暴風注意報 (mock)"],
+    conditionLabel: "Strong wind with showers",
+    alerts: ["Storm warning — approaching typhoon (mock)"],
   },
   // Fallback only — this booking normally resolves through the live API.
   "demo-booking-007": {
@@ -92,7 +92,7 @@ const FIXTURES: Record<string, FixtureWeather> = {
     windGustMaxKmh: 24,
     temperatureC: 33,
     weatherCodes: [2],
-    conditionLabel: "一部曇り",
+    conditionLabel: "Partly cloudy",
     alerts: [],
   },
 };
@@ -107,7 +107,7 @@ const DEFAULT_FIXTURE: FixtureWeather = {
   windGustMaxKmh: 20,
   temperatureC: 25,
   weatherCodes: [2],
-  conditionLabel: "一部曇り (default fixture)",
+  conditionLabel: "Partly cloudy (default fixture)",
   alerts: [],
 };
 

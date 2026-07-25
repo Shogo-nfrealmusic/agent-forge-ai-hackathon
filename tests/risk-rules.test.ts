@@ -54,7 +54,7 @@ describe("deterministic risk rules — severe weather", () => {
         precipitationProbabilityMax: 5,
         windSpeedMaxKmh: 8,
         windGustMaxKmh: 10,
-        alerts: ["台風接近に伴う暴風注意報"],
+        alerts: ["Storm warning — approaching typhoon"],
       }),
     );
     expect(result.riskLevel).toBe("high");
@@ -91,7 +91,7 @@ describe("deterministic risk rules — severe weather", () => {
         precipitationProbabilityMax: 75, // medium on its own
         windSpeedMaxKmh: 40, // high
         weatherCodes: [95], // high
-        alerts: ["暴風警報"], // high
+        alerts: ["Storm warning"], // high
       }),
     );
     expect(result.riskLevel).toBe("high");

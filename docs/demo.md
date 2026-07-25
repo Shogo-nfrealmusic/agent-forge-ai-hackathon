@@ -1,22 +1,23 @@
-# Demo 手順（所要 5 分）
+# Demo script (~6 minutes)
 
-## 0. 準備
+## 0. Setup
 
 ```bash
 npm install
 npm run dev          # http://localhost:3000
 ```
 
-環境変数は**設定不要**です。`AI_API_KEY` が無ければ自動的に mock adapter で動きます。
+**No environment variables are needed.** With no `AI_API_KEY` the app uses the mock AI adapter, and
+with no WhatsApp provider it uses hand-off links. Everything below works out of the box.
 
-Wi-Fi が不安定な会場では、天気も含めて完全オフラインにできます:
+If the venue Wi-Fi is unreliable, go fully offline:
 
 ```bash
 echo "WEATHER_USE_LIVE=false" >> .env.local
 npm run dev
 ```
 
-デモを毎回まっさらな状態から始めたい場合:
+To start from a clean slate:
 
 ```bash
 rm -rf .data
@@ -24,153 +25,195 @@ rm -rf .data
 
 ---
 
-## 1. 予約一覧（http://localhost:3000）
+## 1. Booking list — http://localhost:3000
 
-**話すこと**
+**Say:**
 
-- mock の屋外撮影予約が 7 件。実システムには繋いでいない
-- 上部のバッジで、天気とAIのデータソースが常に見える
-  （`ai: mock (AI_API_KEY 未設定)` = キーなしでも動く）
-- `demo-booking-001`〜`006` はシナリオを固定するため fixture 天気、
-  `demo-booking-007` だけは直近日付で **ライブの Open-Meteo** を叩く
-
----
-
-## 2. High リスク: `demo-booking-004`（Enoshima / 降水確率 85%）
-
-予約カードをクリック → 自動で解析が走る（ローディング表示）。
-
-**見せるポイント**
-
-1. **天気サマリー** — 降水確率 85%、データソースのバッジ
-2. **決定ルール判定 = HIGH** — 「降水確率 85% (>= 80%)」と、どのルールが効いたかを明示
-3. **AI 判定 = HIGH** — 推奨アクション `reschedule`、confidence、`ルール判定と一致` バッジ
-4. **顧客向けメッセージ案** — 振替を提案する日本語の下書き。「送信機能なし」バッジ付き
-
-**話すこと**
-
-> AI の判定だけを見せるのではなく、必ずルールの判定を並べて出します。
-> AI が壊れてもルールは壊れないので、スタッフは常に根拠のある数字を見られます。
+- Seven mock outdoor shoots. Nothing is connected to a real booking system.
+- The badges along the top always show where the data came from and what this instance can do:
+  `ai: mock`, `delivery: link hand-off only`.
+- Bookings 001–006 use fixture weather so the demo scenarios are stable; 007 has a near date and
+  hits the live Open-Meteo API.
 
 ---
 
-## 3. ★ 要確認ケース: `demo-booking-002`（Yoyogi Park / 降水確率 65%）
+## 2. High risk — `demo-booking-004` (Enoshima, 85% chance of rain)
 
-**このデモの核心です。**
+Click the card; the analysis runs automatically.
 
-- 決定ルール = **LOW**（70% 未満なので該当ルールなし）
-- AI = **MEDIUM**（AI は 60% 台でも崩れると判断）
-- → 画面上部に**黄色の「要確認」バナー**が出る
-- → 推奨アクションは `contact_staff` に落ちる
-- → 安全側の `MEDIUM` を運用レベルとして併記
+**Point out:**
 
-**話すこと**
+1. **Weather summary** — 85% chance of rain, with a source badge
+2. **Deterministic rule result = HIGH** — and exactly which rule fired:
+   "85% chance of rain (>= 80%)"
+3. **AI assessment = HIGH** — recommended action `reschedule`, a confidence value, and a
+   "Matches the rule result" badge
+4. **Message to the customer** — a ready-to-send English draft, currently locked
 
-> AI とルールが食い違ったとき、勝手にどちらかを採用しません。「要確認」として人間に戻します。
-> エージェントが自信満々に間違えるのを、構造で防いでいます。
+**Say:**
 
----
-
-## 4. 警報ケース: `demo-booking-006`（Kamakura / 台風接近 + 風速 42 km/h）
-
-- ルール判定が **3 つ同時にヒット**（警報・強風・…）して HIGH
-- 「警報・注意報」欄に台風の注意報が表示される
-
-**話すこと**
-
-> ルールは複数ヒットしたら最も重いレベルを採用します。根拠は全部画面に出します。
+> We never show the AI's answer alone. The rule result sits next to it. If the model breaks, the
+> rules do not, so staff always have a number they can defend.
 
 ---
 
-## 4.5. ライブ天気: `demo-booking-007`（Shinjuku Gyoen / 2026-07-28）
+## 3. ★ The disagreement case — `demo-booking-002` (Yoyogi Park, 65%)
 
-- 天気サマリーのバッジが **`source: Open-Meteo`**（グレー、`degraded` なし）になる
-- 実際の予報値がそのまま入っている
+**This is the heart of the demo.**
 
-**話すこと**
+- Deterministic rules = **LOW** (65% is under the 70% threshold)
+- AI = **MEDIUM** (it reads 60-something percent as a real risk)
+- A yellow **NEEDS CHECK** banner appears at the top
+- The recommended action drops to `contact_staff`
+- The safer of the two levels (MEDIUM) is reported as the effective level
 
-> 天気は無料の Open-Meteo を API キーなしで叩いています。
-> 他の予約は予報範囲（約16日先）より先の日付なので fixture にフォールバックしていて、
-> そのフォールバック自体も画面で明示されます。
+**Say:**
 
-> **注意**: `demo-booking-007` の日付（2026-07-28）を過ぎるとこの予約もフォールバックします。
-> デモ前に `src/lib/fixtures/bookings.ts` の日付を直近に更新してください。
-
----
-
-## 5. スタッフ判断 → 監査ログ
-
-`demo-booking-004` の画面下部で:
-
-1. 理由欄に何か入力（例: 「屋内スタジオの空きがあるため振替ではなく変更で提案したい」）
-2. **Reject** を押す
-   - → 「監査ログに記録しました」と表示
-   - → `bookingSystemMutated: false` が画面に出る
-3. 理由を空にして **Reject** を押す
-   - → 「Reject の場合は理由を入力してください」で止まる（理由なしでは記録できない）
-4. **Approve** を押す
-   - → `staff approved recommendation (no booking system call was made)` と記録される
-
-**話すこと**
-
-> どのボタンを押しても、予約システム・決済・メール送信は一切呼ばれません。
-> ローカルの監査ログに 1 行追記されるだけです。これはテストで固定してあります。
+> When the AI and the rules disagree, we do not silently pick a winner. We hand it back to a human.
+> This is how you stop an agent from being confidently wrong.
 
 ---
 
-## 6. 監査ログ画面（ヘッダーの「監査ログ」）
+## 4. Severe weather — `demo-booking-006` (Kamakura, typhoon + 42 km/h wind)
 
-- 判断・予約 ID・時刻・ルール判定・AI 判定・理由・データソースが 1 件ずつ並ぶ
-- 不一致だったものには「要確認」バッジが付く
-- 全件に `no booking system call was made` の注記
+- Three rules fire at once and the result is HIGH
+- The warning appears in the "Warnings" field
+
+**Say:**
+
+> With multiple hits we take the most severe. Every reason is on screen — nothing is hidden behind
+> a score.
 
 ---
 
-## 7. 障害時の挙動を見せる（任意・インパクト大）
+## 5. Live weather — `demo-booking-007` (Shinjuku Gyoen)
 
-天気 API を落とした状態を作ります。
+- The badge reads **`source: Open-Meteo`** with no fallback warning
+- Real forecast values
+
+**Say:**
+
+> Weather comes from Open-Meteo, no API key required. The other bookings are past its ~16-day
+> horizon, so they fall back to fixtures — and the fallback is stated on screen rather than hidden.
+
+> **Note:** if today is after 2026-07-28, update the date in `src/lib/fixtures/bookings.ts` before
+> demoing, or this one falls back too.
+
+---
+
+## 6. Staff decision → audit log
+
+Back on `demo-booking-004`, scroll to **Staff decision**.
+
+1. Type a reason, e.g. *"The indoor studio is free that morning, so I would rather offer a location
+   change than a new date."*
+2. Press **Reject**
+   - "Recorded in the audit log" appears, showing `bookingSystemMutated: false`
+3. Clear the reason and press **Reject** again
+   - It stops with "Please enter a reason before rejecting" — a rejection without a reason cannot be
+     recorded
+4. Press **Approve**
+   - Recorded as `staff approved recommendation (no booking system call was made)`
+
+**Say:**
+
+> None of these buttons calls a booking system, a payment provider or a messaging service. They
+> append one line to a local file. That is pinned down by a test that makes `fetch` throw.
+
+---
+
+## 7. ★ Sending the message — the approval gate
+
+Notice what just happened when you pressed Approve: the **Message to the customer** section
+unlocked. Before that it was marked *"Locked — approve first"*.
+
+1. Edit the draft in the textarea — what you send is what is in the box
+2. Choose the channel: **WhatsApp** (`+15550103`) or **Email** (`demo-four@example.com`)
+3. Press **Open in WhatsApp**
+   - Your own WhatsApp opens with the message pre-filled. **You** press send.
+4. Press **Send via provider**
+   - It is disabled, because no provider is configured
+
+**Say:**
+
+> Two paths. The default one sends nothing from our server at all — it hands the draft to the staff
+> member's own WhatsApp, so a human is unavoidably in the loop. The API path exists, supports the
+> Meta Cloud API and Twilio, and is protected by three gates: an approval must be on record, a
+> provider must be configured, and a kill switch must be flipped on. All three default to off.
+
+**Optional — prove the gate is server-side:**
 
 ```bash
-# 別ターミナルで
+curl -s -X POST http://localhost:3000/api/deliver \
+  -H 'Content-Type: application/json' \
+  -d '{"bookingId":"demo-booking-003","channel":"whatsapp","message":"hello"}'
+```
+
+```json
+{"error":"This booking has no approved decision yet. Approve the recommendation before sending anything to the customer."}
+```
+
+> 409. Editing the front end does not get you past it.
+
+---
+
+## 8. Audit log (top navigation)
+
+- Decisions and deliveries in one timeline, newest first
+- Decisions show the rule level, the AI level, the recommendation, the reason and the data sources
+- Disagreements are tagged **NEEDS CHECK**
+- Delivery rows show a **masked** destination (`+1555**03`) and the message **length** — the body is
+  never stored
+- Every row states `no booking system call was made`
+
+---
+
+## 9. Optional but effective — break something
+
+```bash
 AI_BASE_URL=https://127.0.0.1:9/v1 AI_API_KEY=dummy npm run dev
 ```
 
-予約詳細を開くと:
+Open any booking:
 
-- AI 欄に「AI provider への接続に失敗しました … mock を使用しました」と表示
-- それでも**画面は壊れず**、ルール判定・対応案・メッセージ案がすべて出る
+- The AI panel reads "Could not reach the AI provider … the mock adapter was used instead"
+- The screen still works — rules, recommendation and draft message are all there
 
-**話すこと**
+**Say:**
 
-> 外部依存が落ちてもデモが死なないように、天気も AI も二重化しています。
+> Weather and AI are both doubled up, so a dead dependency degrades the demo instead of ending it.
 
 ---
 
-## 8. テストを見せる
+## 10. The tests
 
 ```bash
 npm test
 ```
 
 ```
-Test Files  9 passed (9)
-     Tests  115 passed (115)
+Test Files  10 passed (10)
+     Tests  163 passed (163)
 ```
 
-特に読み上げる価値があるもの:
+Worth reading out loud:
 
-- `Approve performs no external I/O > does not call fetch when a decision is recorded`
-- `the whole source tree is free of real contact details`
+- `approving does not send a message — it only unlocks the ability to`
+- `makes NO network call when the kill switch is off, even with a provider`
+- `the delivery route enforces the approval gate before anything is sent`
+- `only reaches the three hosts this app is documented to use`
+- `contains no phone number outside the fictional range`
 - `no "use client" module reads process.env`
-- `parseAiResponse — malformed input is handled safely`（13 パターン）
 
 ---
 
-## トラブルシューティング
+## Troubleshooting
 
-| 症状 | 対処 |
+| Symptom | Fix |
 |---|---|
-| 天気が全部 fixture になる | 予約日が Open-Meteo の予報範囲（約16日先）外。想定内の挙動でフォールバック中 |
-| `ai: mock` バッジが消えない | `.env.local` に `AI_API_KEY` を設定して dev サーバーを再起動 |
-| 監査ログが空 | `.data/audit-log.jsonl` を確認。削除した場合は再度 Approve すれば再生成される |
-| ポート 3000 が埋まっている | `npm run dev -- -p 3001` |
+| Every booking shows fixture weather | Expected — those dates are past Open-Meteo's ~16-day horizon. Use `demo-booking-007`. |
+| The `ai: mock` badge will not go away | Put `AI_API_KEY` in `.env.local` and restart the dev server |
+| "Send via provider" is greyed out | No `WHATSAPP_PROVIDER` configured. This is the safe default — use the hand-off link. |
+| Delivery returns 409 | There is no approved decision for that booking yet. Press Approve first. |
+| The audit log is empty | Check `.data/audit-log.jsonl`. If you deleted it, press Approve again. |
+| Port 3000 is taken | `npm run dev -- -p 3001` |

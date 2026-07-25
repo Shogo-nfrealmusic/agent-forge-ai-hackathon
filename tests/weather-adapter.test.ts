@@ -24,7 +24,7 @@ describe("parseTimeRange", () => {
   });
 
   it("returns null for garbage", () => {
-    expect(parseTimeRange("そのうち")).toBeNull();
+    expect(parseTimeRange("sometime later")).toBeNull();
     expect(parseTimeRange("")).toBeNull();
   });
 });
@@ -98,7 +98,7 @@ describe("getWeatherForBooking — fallback behaviour", () => {
     const weather = await getWeatherForBooking(booking, { useLive: true });
     expect(weather.source).toBe("fixture");
     expect(weather.degraded).toBe(true);
-    expect(weather.fallbackReason).toContain("接続に失敗");
+    expect(weather.fallbackReason).toContain("Could not reach Open-Meteo");
   });
 
   it("falls back to fixture on a non-2xx response", async () => {
@@ -117,7 +117,7 @@ describe("getWeatherForBooking — fallback behaviour", () => {
     const weather = await getWeatherForBooking(booking, { useLive: true });
     expect(weather.source).toBe("fixture");
     expect(weather.degraded).toBe(true);
-    expect(weather.fallbackReason).toContain("予報範囲外");
+    expect(weather.fallbackReason).toContain("Outside the forecast range");
   });
 
   it("falls back when the response body is not JSON", async () => {

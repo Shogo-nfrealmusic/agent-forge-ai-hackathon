@@ -11,7 +11,18 @@ import { readSourceFiles } from "./helpers";
  * tests fail the build if a future change would leak the AI key.
  */
 
-const SECRET_ENV_NAMES = ["AI_API_KEY", "AI_BASE_URL", "AI_MODEL"];
+const SECRET_ENV_NAMES = [
+  "AI_API_KEY",
+  "AI_BASE_URL",
+  "AI_MODEL",
+  "WHATSAPP_ACCESS_TOKEN",
+  "WHATSAPP_PHONE_NUMBER_ID",
+  "WHATSAPP_PROVIDER",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_WHATSAPP_FROM",
+  "DELIVERY_ALLOW_REAL_SEND",
+];
 const SECRET_WORDS = ["API_KEY", "APIKEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL"];
 
 function isClientModule(content: string): boolean {
@@ -36,6 +47,12 @@ describe("no secret reaches the browser bundle", () => {
     for (const { rel, content } of files.filter((f) => isClientModule(f.content))) {
       expect(content, `${rel} must not import the AI adapter`).not.toContain("@/lib/ai/adapter");
       expect(content, `${rel} must not import the audit store`).not.toContain("@/lib/audit/store");
+      expect(content, `${rel} must not import the WhatsApp adapter`).not.toContain(
+        "@/lib/delivery/whatsapp",
+      );
+      expect(content, `${rel} must not import the email adapter`).not.toContain(
+        "@/lib/delivery/email",
+      );
     }
   });
 
@@ -53,7 +70,11 @@ describe("no secret reaches the browser bundle", () => {
 
   it("reads the AI credentials only from server-side modules", async () => {
     const files = await readSourceFiles();
-    const allowed = [path.join("lib", "ai"), path.join("app", "api")];
+    const allowed = [
+      path.join("lib", "ai"),
+      path.join("lib", "delivery"),
+      path.join("app", "api"),
+    ];
 
     for (const { rel, content } of files) {
       const mentionsSecret = SECRET_ENV_NAMES.some((name) =>
@@ -85,6 +106,8 @@ describe("no secret reaches the browser bundle", () => {
   it("next.config.ts does not re-export env vars to the client", async () => {
     const config = await readFile(path.join(process.cwd(), "next.config.ts"), "utf8");
     expect(config).not.toContain("AI_API_KEY");
+    expect(config).not.toContain("WHATSAPP_ACCESS_TOKEN");
+    expect(config).not.toContain("TWILIO_AUTH_TOKEN");
     expect(config).not.toMatch(/^\s*env\s*:/m);
   });
 });
@@ -93,6 +116,10 @@ describe(".env.example is a template, not a secret store", () => {
   it("exists and ships no real values", async () => {
     const example = await readFile(path.join(process.cwd(), ".env.example"), "utf8");
     expect(example).toContain("AI_API_KEY=");
+    expect(example).toContain("WHATSAPP_ACCESS_TOKEN=");
+    expect(example).toContain("TWILIO_AUTH_TOKEN=");
+    // The kill switch must ship in the OFF position.
+    expect(example).toContain("DELIVERY_ALLOW_REAL_SEND=false");
 
     for (const line of example.split("\n")) {
       const match = line.match(/^([A-Z0-9_]+)=(.*)$/);

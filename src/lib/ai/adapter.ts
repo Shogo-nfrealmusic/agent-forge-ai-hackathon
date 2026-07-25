@@ -76,7 +76,7 @@ export async function getAiRecommendation(
 
   const config = opts.config !== undefined ? opts.config : readAiConfig();
   if (!config) {
-    return mock("AI_API_KEY が未設定のため mock adapter を使用しました");
+    return mock("AI_API_KEY is not set, so the mock adapter was used");
   }
 
   const startedAt = Date.now();
@@ -103,19 +103,19 @@ export async function getAiRecommendation(
 
     if (!res.ok) {
       // Body is intentionally not surfaced — provider errors can echo the key.
-      return mock(`AI provider が HTTP ${res.status} を返したため mock にフォールバックしました`);
+      return mock(`The AI provider returned HTTP ${res.status}, so the mock adapter was used`);
     }
 
     const json = (await res.json()) as ChatCompletionResponse;
     const content = json.choices?.[0]?.message?.content;
 
     if (typeof content !== "string" || content.trim() === "") {
-      return mock("AI provider の応答が空だったため mock にフォールバックしました");
+      return mock("The AI provider returned an empty response, so the mock adapter was used");
     }
 
     const parsed = parseAiResponse(content);
     if (!parsed.ok || !parsed.data) {
-      return mock(`${parsed.error ?? "AI応答が不正です"} — mock にフォールバックしました`);
+      return mock(`${parsed.error ?? "Invalid AI response"} - the mock adapter was used instead`);
     }
 
     return {
@@ -126,6 +126,6 @@ export async function getAiRecommendation(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return mock(`AI provider への接続に失敗しました (${message}) — mock を使用しました`);
+    return mock(`Could not reach the AI provider (${message}) - the mock adapter was used instead`);
   }
 }

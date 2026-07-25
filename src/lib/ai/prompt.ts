@@ -1,24 +1,34 @@
 import type { Booking, DeterministicRisk, WeatherSummary } from "@/lib/types";
 
-export const SYSTEM_PROMPT = `あなたは屋外フォト撮影スタジオのオペレーション支援アシスタントです。
-予約情報と天気予報をもとに、撮影当日のリスクとスタッフ向けの対応案、顧客へ送るメッセージ案を作成します。
+export const SYSTEM_PROMPT = `You are an operations assistant for an outdoor photo-shoot studio.
+Given a booking and its weather forecast, you assess the risk to the shoot, propose an action for
+the staff, and draft a message the staff can send to the customer.
 
-必ず守る制約:
-- あなたは予約の変更・キャンセル・返金を実行する権限を一切持ちません。提案のみを行います。
-- 出力する customerMessage は「送信前の下書き」です。スタッフが承認するまで送信されません。
-- 決定ルールによるリスク判定が別途与えられます。あなたの判定が異なる場合でも、決定ルールを書き換えず、自分の判断根拠を summary に簡潔に書いてください。
-- requiresHumanReview は必ず true にしてください。
-- 出力は JSON オブジェクトのみ。前後に説明文やコードフェンスを付けないでください。
+Hard constraints:
+- You have NO authority to change, cancel or refund a booking. You only make proposals.
+- The customerMessage you produce is a DRAFT. It is not sent until a staff member approves it.
+- A deterministic rule engine has already produced its own risk level, which is given to you.
+  You may disagree, but you cannot overwrite it. If you disagree, say why briefly in "summary".
+- Always set requiresHumanReview to true.
+- Write in clear, professional English. The customer is an international client.
+- Output ONLY a JSON object. No prose before or after it, no code fences.
 
-出力スキーマ:
+Output schema:
 {
   "riskLevel": "low" | "medium" | "high",
-  "summary": "判断理由（日本語・150文字以内）",
+  "summary": "why you reached this conclusion (English, max 200 characters)",
   "recommendation": "keep" | "reschedule" | "plan_change" | "contact_staff",
-  "customerMessage": "顧客向けメッセージ案（日本語・敬体）",
-  "confidence": 0.0〜1.0 の数値,
+  "customerMessage": "draft message to the customer (English, polite, ready to send)",
+  "confidence": a number between 0.0 and 1.0,
   "requiresHumanReview": true
-}`;
+}
+
+Guidance for customerMessage:
+- Keep it short enough to work as a WhatsApp message (roughly 60-120 words).
+- Open with the booking date, time and location so the customer knows what it is about.
+- State the forecast plainly, then propose concrete options.
+- Never promise a refund. If a change is needed, invite the customer to reply with their preference.
+- Do not invent details that are not in the booking or the forecast.`;
 
 export function buildUserPrompt(
   booking: Booking,
@@ -27,26 +37,26 @@ export function buildUserPrompt(
 ): string {
   const wind = Math.max(weather.windSpeedMaxKmh, weather.windGustMaxKmh);
 
-  return `# 予約情報
-- 予約ID: ${booking.bookingId}
-- 日時: ${booking.date} ${booking.time} (${booking.timezone})
-- 所要時間: ${booking.durationMinutes}分
-- ロケーション: ${booking.location} (lat ${booking.latitude}, lon ${booking.longitude})
-- プラン: ${booking.plan}
-- 顧客名（ダミー）: ${booking.customerName}
+  return `# Booking
+- Booking ID: ${booking.bookingId}
+- When: ${booking.date} ${booking.time} (${booking.timezone})
+- Duration: ${booking.durationMinutes} minutes
+- Location: ${booking.location} (lat ${booking.latitude}, lon ${booking.longitude})
+- Plan: ${booking.plan}
+- Customer name (dummy value): ${booking.customerName}
 
-# 天気予報（${weather.source === "fixture" ? "フィクスチャ" : "Open-Meteo"}）
-- 対象時間帯: ${weather.date} ${weather.timeRange}
-- 天候: ${weather.conditionLabel}
-- 降水確率(最大): ${weather.precipitationProbabilityMax}%
-- 降水量(合計): ${weather.precipitationMm} mm
-- 最大風速: ${wind} km/h
-- 気温: ${weather.temperatureC}℃
-- 警報・注意報: ${weather.alerts.length > 0 ? weather.alerts.join(", ") : "なし"}
+# Weather forecast (${weather.source === "fixture" ? "fixture data" : "Open-Meteo"})
+- Window: ${weather.date} ${weather.timeRange}
+- Conditions: ${weather.conditionLabel}
+- Max chance of rain: ${weather.precipitationProbabilityMax}%
+- Total precipitation: ${weather.precipitationMm} mm
+- Max wind: ${wind} km/h
+- Temperature: ${weather.temperatureC}C
+- Warnings: ${weather.alerts.length > 0 ? weather.alerts.join(", ") : "none"}
 
-# 決定ルールによる判定（参考・変更不可）
-- リスクレベル: ${deterministic.riskLevel}
-- 根拠: ${deterministic.reason}
+# Deterministic rule engine result (reference only — you cannot change it)
+- Risk level: ${deterministic.riskLevel}
+- Reasoning: ${deterministic.reason}
 
-上記をもとに JSON を出力してください。`;
+Produce the JSON object now.`;
 }

@@ -3,9 +3,9 @@ import { extractJsonObject, parseAiResponse } from "@/lib/ai/schema";
 
 const VALID = {
   riskLevel: "medium",
-  summary: "降水確率がやや高い",
+  summary: "Chance of rain is somewhat elevated",
   recommendation: "plan_change",
-  customerMessage: "屋根のあるロケーションへの変更をご提案します。",
+  customerMessage: "We would like to suggest a covered location.",
   confidence: 0.7,
   requiresHumanReview: true,
 };
@@ -20,7 +20,7 @@ describe("extractJsonObject", () => {
   });
 
   it("parses an object surrounded by prose", () => {
-    expect(extractJsonObject('はい、結果です:\n{"a":1}\n以上です。')).toEqual({ a: 1 });
+    expect(extractJsonObject('Sure, here it is:\n{"a":1}\nThat is all.')).toEqual({ a: 1 });
   });
 
   it("returns null for unparseable input", () => {
@@ -33,7 +33,7 @@ describe("extractJsonObject", () => {
 describe("parseAiResponse — malformed input is handled safely", () => {
   it.each([
     ["empty string", ""],
-    ["prose only", "判断できません"],
+    ["prose only", "I cannot determine this"],
     ["truncated JSON", '{"riskLevel":"high","summary":'],
     ["array instead of object", "[1,2,3]"],
     ["null", null],

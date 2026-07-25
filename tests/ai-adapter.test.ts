@@ -19,9 +19,9 @@ function chatResponse(content: unknown) {
 
 const VALID: AiRecommendation = {
   riskLevel: "high",
-  summary: "降水確率が高く屋外撮影は困難",
+  summary: "High chance of rain makes an outdoor shoot difficult",
   recommendation: "reschedule",
-  customerMessage: "振替をご提案します。",
+  customerMessage: "We would like to suggest another date.",
   confidence: 0.9,
   requiresHumanReview: true,
 };
@@ -69,7 +69,7 @@ describe("getAiRecommendation — fallback to mock", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
     const result = await getAiRecommendation(booking, weather, deterministic, { config });
     expect(result.source).toBe("mock");
-    expect(result.fallbackReason).toContain("接続に失敗");
+    expect(result.fallbackReason).toContain("Could not reach the AI provider");
   });
 
   it("falls back to mock on a non-2xx response without leaking the body", async () => {
@@ -96,13 +96,13 @@ describe("getAiRecommendation — fallback to mock", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(chatResponse("")));
     const result = await getAiRecommendation(booking, weather, deterministic, { config });
     expect(result.source).toBe("mock");
-    expect(result.fallbackReason).toContain("空");
+    expect(result.fallbackReason).toContain("empty response");
   });
 
   it("falls back to mock when the model returns prose instead of JSON", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(chatResponse("すみません、判断できませんでした。")),
+      vi.fn().mockResolvedValue(chatResponse("Sorry, I could not make a determination.")),
     );
     const result = await getAiRecommendation(booking, weather, deterministic, { config });
     expect(result.source).toBe("mock");

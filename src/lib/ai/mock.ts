@@ -14,8 +14,10 @@ import { THUNDERSTORM_CODES } from "@/lib/risk/rules";
  * Used when no API key is configured, when the live provider fails, or when the
  * live response fails validation. It is intentionally a *slightly different*
  * heuristic from the deterministic rules (medium at >=60% instead of >=70%) so
- * the demo can exercise the "AI と ルールが不一致 → 要確認" path without a
- * network call.
+ * the demo can exercise the "AI and rules disagree -> NEEDS CHECK" path without
+ * a network call.
+ *
+ * Messages are kept short enough to work as a WhatsApp message.
  */
 
 const MOCK_THRESHOLDS = {
@@ -50,18 +52,18 @@ const CONFIDENCE_BY_LEVEL: Record<RiskLevel, number> = {
 
 function buildSummary(weather: WeatherSummary, level: RiskLevel): string {
   const parts = [
-    `降水確率 ${weather.precipitationProbabilityMax}%`,
-    `最大風速 ${Math.max(weather.windSpeedMaxKmh, weather.windGustMaxKmh)} km/h`,
-    weather.conditionLabel,
+    `${weather.precipitationProbabilityMax}% chance of rain`,
+    `max wind ${Math.max(weather.windSpeedMaxKmh, weather.windGustMaxKmh)} km/h`,
+    weather.conditionLabel.toLowerCase(),
   ];
-  if (weather.alerts.length > 0) parts.push(`警報: ${weather.alerts.join(", ")}`);
+  if (weather.alerts.length > 0) parts.push(`warning: ${weather.alerts.join(", ")}`);
 
   const verdict: Record<RiskLevel, string> = {
-    low: "撮影実施に大きな支障はない見込み",
-    medium: "撮影は可能だが天候が崩れる可能性があり調整余地あり",
-    high: "予定どおりの屋外撮影は困難な見込み",
+    low: "The shoot should go ahead without significant disruption.",
+    medium: "The shoot is possible, but conditions may turn; worth offering options.",
+    high: "An outdoor shoot as planned is unlikely to work.",
   };
-  return `${parts.join(" / ")}。${verdict[level]}。`;
+  return `${parts.join(", ")}. ${verdict[level]}`;
 }
 
 function buildCustomerMessage(
@@ -69,18 +71,18 @@ function buildCustomerMessage(
   weather: WeatherSummary,
   level: RiskLevel,
 ): string {
-  const when = `${booking.date} ${booking.time}`;
-  const head = `${booking.customerName} 様\n\nいつもご利用ありがとうございます。${when}（${booking.location}）でご予約いただいている「${booking.plan}」について、当日の天候見込みをご連絡いたします。`;
-  const weatherLine = `現時点の予報では、降水確率 ${weather.precipitationProbabilityMax}%、${weather.conditionLabel}となっております。`;
+  const when = `${booking.date}, ${booking.time}`;
+  const head = `Hi ${booking.customerName}, this is the studio team about your ${booking.plan} booking on ${when} at ${booking.location}.`;
+  const weatherLine = `The current forecast for that window is ${weather.conditionLabel.toLowerCase()} with a ${weather.precipitationProbabilityMax}% chance of rain.`;
 
   const body: Record<RiskLevel, string> = {
-    low: "現時点では予定どおり実施できる見込みです。当日の状況に変化があった場合は、改めてご連絡いたします。",
+    low: "Everything looks good to go ahead as planned. We will let you know if the forecast changes closer to the day.",
     medium:
-      "天候が崩れる可能性があるため、①開始時間の前後調整、②屋根のあるロケーションへの変更、③別日への振替、のいずれかをご検討いただけますと幸いです。ご希望をお知らせいただければ、こちらで空き状況をお調べいたします。",
-    high: "安全面と仕上がりの品質を考慮し、別日への振替、または屋内ロケーションへの変更をご提案させていただきたく存じます。ご都合のよい候補日をお知らせいただけますでしょうか。振替に伴う追加費用はいただきません。",
+      "Conditions could turn during the session. If you would like, we can (1) shift the start time by an hour, (2) move to a covered location nearby, or (3) reschedule to another day. Just reply with what suits you best and we will check availability.",
+    high: "For safety and for the quality of the photos, we would like to suggest moving the session to another day, or switching to an indoor location. There is no extra charge for the change. Could you reply with a couple of dates that work for you?",
   };
 
-  return `${head}\n\n${weatherLine}${body[level]}\n\nご不明な点がございましたら、本メールにご返信ください。\n\n（このメッセージは下書きです。担当スタッフの確認後に送信されます）`;
+  return `${head}\n\n${weatherLine} ${body[level]}\n\nThank you,\nStudio Operations`;
 }
 
 export function generateMockRecommendation(
@@ -95,7 +97,9 @@ export function generateMockRecommendation(
     riskLevel: level,
     summary:
       buildSummary(weather, level) +
-      (disagrees ? "（決定ルールの判定と異なるため、スタッフによる確認が必要です）" : ""),
+      (disagrees
+        ? " (This differs from the deterministic rule result, so a staff member must review it.)"
+        : ""),
     recommendation: disagrees ? "contact_staff" : RECOMMENDATION_BY_LEVEL[level],
     customerMessage: buildCustomerMessage(booking, weather, level),
     confidence: disagrees ? 0.5 : CONFIDENCE_BY_LEVEL[level],

@@ -83,7 +83,7 @@ export interface ParseResult {
 export function parseAiResponse(raw: unknown): ParseResult {
   const candidate = typeof raw === "string" ? extractJsonObject(raw) : raw;
   if (candidate === null || candidate === undefined) {
-    return { ok: false, error: "AI応答からJSONを抽出できませんでした" };
+    return { ok: false, error: "Could not extract a JSON object from the AI response" };
   }
 
   const result = aiRecommendationSchema.safeParse(normalizeAiPayload(candidate));
@@ -91,7 +91,7 @@ export function parseAiResponse(raw: unknown): ParseResult {
     const issues = result.error.issues
       .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("; ");
-    return { ok: false, error: `AI応答がスキーマに一致しません — ${issues}` };
+    return { ok: false, error: `The AI response does not match the schema - ${issues}` };
   }
 
   // Human review is non-negotiable in this prototype, whatever the model says.

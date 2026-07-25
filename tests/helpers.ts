@@ -47,7 +47,7 @@ export function makeWeather(overrides: Partial<WeatherSummary> = {}): WeatherSum
     windGustMaxKmh: 15,
     temperatureC: 28,
     weatherCodes: [1],
-    conditionLabel: "概ね晴れ",
+    conditionLabel: "Mostly sunny",
     alerts: [],
     ...overrides,
   };

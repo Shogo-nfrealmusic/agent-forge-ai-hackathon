@@ -31,34 +31,34 @@ interface OpenMeteoHourly {
   weather_code?: (number | null)[];
 }
 
-/** WMO weather-code → Japanese label. */
+/** WMO weather-code → human-readable label. */
 export const WMO_LABELS: Record<number, string> = {
-  0: "快晴",
-  1: "概ね晴れ",
-  2: "一部曇り",
-  3: "曇り",
-  45: "霧",
-  48: "着氷性の霧",
-  51: "霧雨(弱)",
-  53: "霧雨",
-  55: "霧雨(強)",
-  61: "雨(弱)",
-  63: "雨",
-  65: "雨(強)",
-  71: "雪(弱)",
-  73: "雪",
-  75: "雪(強)",
-  80: "にわか雨(弱)",
-  81: "にわか雨",
-  82: "にわか雨(激しい)",
-  95: "雷雨",
-  96: "雷雨(ひょうを伴う)",
-  99: "雷雨(激しいひょう)",
+  0: "Clear sky",
+  1: "Mostly sunny",
+  2: "Partly cloudy",
+  3: "Overcast",
+  45: "Fog",
+  48: "Freezing fog",
+  51: "Light drizzle",
+  53: "Drizzle",
+  55: "Heavy drizzle",
+  61: "Light rain",
+  63: "Rain",
+  65: "Heavy rain",
+  71: "Light snow",
+  73: "Snow",
+  75: "Heavy snow",
+  80: "Light showers",
+  81: "Showers",
+  82: "Violent showers",
+  95: "Thunderstorm",
+  96: "Thunderstorm with hail",
+  99: "Thunderstorm with heavy hail",
 };
 
 export function describeWeatherCodes(codes: number[]): string {
-  if (codes.length === 0) return "情報なし";
-  const labels = [...new Set(codes)].map((c) => WMO_LABELS[c] ?? `コード${c}`);
+  if (codes.length === 0) return "No data";
+  const labels = [...new Set(codes)].map((c) => WMO_LABELS[c] ?? `Code ${c}`);
   return labels.join(" / ");
 }
 
@@ -176,7 +176,7 @@ export async function getWeatherForBooking(
     });
 
     if (!res.ok) {
-      return fallback(`Open-Meteo が HTTP ${res.status} を返しました`);
+      return fallback(`Open-Meteo returned HTTP ${res.status}`);
     }
 
     const json = (await res.json()) as { hourly?: OpenMeteoHourly };
@@ -184,7 +184,7 @@ export async function getWeatherForBooking(
 
     if (!summary) {
       return fallback(
-        "予報範囲外、または該当時間帯のデータが取得できませんでした（Open-Meteo は約16日先までしか提供しません）",
+        "Outside the forecast range, or no data for this time window (Open-Meteo only forecasts ~16 days ahead)",
       );
     }
 
@@ -196,6 +196,6 @@ export async function getWeatherForBooking(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return fallback(`Open-Meteo への接続に失敗しました: ${message}`);
+    return fallback(`Could not reach Open-Meteo: ${message}`);
   }
 }

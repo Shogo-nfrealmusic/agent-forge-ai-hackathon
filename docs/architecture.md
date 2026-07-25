@@ -1,145 +1,192 @@
 # Architecture
 
-## 全体像
+## Overview
 
 ```
 ┌──────────────────────────── Browser (client) ────────────────────────────┐
-│  /                予約一覧 (Server Component)                             │
-│  /bookings/[id]   予約詳細 (Server) + AnalysisPanel (Client)              │
-│  /audit           監査ログ (Server Component)                             │
+│  /                Booking list        (Server Component)                 │
+│  /bookings/[id]   Booking detail      (Server) + AnalysisPanel (Client)  │
+│  /audit           Audit log           (Server Component)                 │
 │                                                                          │
-│  クライアントは同一オリジンの API しか叩かない。secret には一切触れない。    │
-└───────────────┬──────────────────────────────────┬───────────────────────┘
-                │ POST /api/analyze                │ POST /api/decisions
-                ▼                                  ▼
+│  The client only ever calls same-origin routes. It never sees a secret.  │
+└───────────┬──────────────────┬───────────────────────┬───────────────────┘
+            │ POST /api/analyze│ POST /api/decisions   │ POST /api/deliver
+            ▼                  ▼                       ▼
 ┌──────────────────────────── Next.js server ──────────────────────────────┐
 │                                                                          │
-│  analyzeBooking()                          recordDecision()              │
-│    ├─ 1. weather adapter ────────────────┐   └─ append 1 line to         │
-│    │      Open-Meteo (no key)            │      .data/audit-log.jsonl    │
-│    │      失敗 → fixture weather          │      （ネットワーク I/O なし） │
-│    ├─ 2. deterministic rules ────────────┤                               │
-│    │      しきい値のみ。AI に依存しない     │                               │
-│    └─ 3. AI adapter ─────────────────────┘                               │
-│           OpenAI 互換 /chat/completions                                   │
-│           AI_API_KEY はここでのみ読む                                      │
-│           失敗 / 不正 JSON → mock adapter                                 │
-│                                                                          │
-│  出力: { weather, deterministic, ai, agreement, effectiveRiskLevel }      │
+│  analyzeBooking()          recordDecision()      GATE: findLatestApproval│
+│   ├ 1. weather adapter      └ append 1 line to    ├ no approval -> 409    │
+│   │    Open-Meteo (no key)    .data/audit-log      ├ deliverMessage()     │
+│   │    fail -> fixture        (no network I/O)     │   whatsapp: meta /   │
+│   ├ 2. deterministic rules                         │     twilio, or dry   │
+│   │    thresholds only, no AI                      │   email: hand-off    │
+│   └ 3. AI adapter                                  └ recordDelivery()     │
+│        OpenAI-compatible /chat/completions            masked destination, │
+│        AI_API_KEY read only here                      length only         │
+│        fail / bad JSON -> mock                                            │
 └──────────────────────────────────────────────────────────────────────────┘
 
-書き込み先は .data/audit-log.jsonl のみ。予約システムへの接続は存在しない。
+The only thing ever written is .data/audit-log.jsonl.
+There is no connection to a booking system anywhere in this codebase.
 ```
 
-## 設計上の中心的な判断
+## The core design decisions
 
-### 1. 決定ルールが真実、AI は第二意見
+### 1. The rules are the truth; the AI is a second opinion
 
-リスク判定は 2 系統で独立に走ります。
+Risk is assessed twice, independently:
 
-- **決定ルール** (`src/lib/risk/rules.ts`) — しきい値だけの純関数。テスト可能で、説明可能で、揺れない。
-- **AI** (`src/lib/ai/adapter.ts`) — 文脈を汲んだ対応案と顧客向け文面を作る。
+- **Deterministic rules** (`src/lib/risk/rules.ts`) — pure threshold functions. Testable,
+  explainable, stable.
+- **AI** (`src/lib/ai/adapter.ts`) — produces the judgement call and the customer-facing wording.
 
-AI にはルール判定の結果をプロンプトで渡しますが、**AI がルールの結果を書き換えることはできません**
-（ルールは AI 呼び出しの前に確定し、レスポンスとは別フィールドで返ります）。
+The rule result is passed to the AI as context, but **the AI cannot overwrite it**: the rules run
+to completion before the AI is called, and the two results are returned in separate fields.
 
-両者が食い違った場合は `agreement: "needs_check"` となり、UI に「要確認」を大きく表示します。
-さらに `effectiveRiskLevel` として**安全側（高い方）**のレベルを併記します。
+When they disagree, `agreement` becomes `"needs_check"`, the UI shows a large NEEDS CHECK banner,
+and `effectiveRiskLevel` reports the **safer of the two**.
 
-これは「AI が Low と言ったから撮影を強行した」という失敗モードを構造的に防ぐためです。
+This structurally prevents the failure mode "the AI said Low, so we went ahead in a storm".
 
-### 2. すべての外部依存にフォールバックがある
+### 2. Every external dependency has a fallback
 
-| アダプタ | 一次系 | 二次系 | 判別方法 |
+| Adapter | Primary | Fallback | How you can tell |
 |---|---|---|---|
 | weather | Open-Meteo | fixture weather | `weather.source` / `weather.degraded` |
-| ai | OpenAI 互換 API | mock adapter | `ai.source` / `ai.fallbackReason` |
+| ai | OpenAI-compatible API | mock adapter | `ai.source` / `ai.fallbackReason` |
+| delivery | Meta / Twilio | dry run + hand-off link | `result.mode` |
 
-どちらも例外を投げません。呼び出し側は必ず使える値を受け取ります。
-デモ中に Wi-Fi が落ちても画面は成立します（`WEATHER_USE_LIVE=false` で完全オフライン）。
+None of them throw. Callers always receive a usable value. With `WEATHER_USE_LIVE=false` and no
+API key, the whole app runs offline — which matters when conference Wi-Fi fails mid-demo.
 
-### 3. mock AI はルールのコピーではない
+### 3. The mock AI is not a copy of the rules
 
-mock adapter (`src/lib/ai/mock.ts`) はわざと**しきい値を変えて**あります（medium が 60% 以上、ルールは 70% 以上）。
+`src/lib/ai/mock.ts` deliberately uses a **different threshold** (medium at >=60%, the rules use
+>=70%).
 
-理由は 2 つ:
+Two reasons:
 
-- ルールのコピーだと「AI とルールが常に一致」してしまい、要確認フローがデモできない
-- 実運用でも AI とルールは食い違うのが普通で、その状態を既定でテストしておきたい
+- If the mock mirrored the rules, they would always agree and the NEEDS CHECK path could never be
+  demonstrated without a live model.
+- In production, an AI and a rule engine disagreeing is the normal case. It should be exercised by
+  default, not treated as an exception.
 
-`demo-booking-002`（降水確率 65%）がこの不一致ケースになります。
+`demo-booking-002` (65% chance of rain) is the disagreement case.
 
-### 4. 監査ログは追記専用の JSONL
+### 4. Delivery is a separate, gated action
 
-`.data/audit-log.jsonl` に 1 行 1 レコードで追記します。更新も削除もしません。
-各レコードには判断時点のルール判定・AI 判定・データソースが含まれ、
-`bookingSystemMutated: false` が常に刻まれます。
+Approving a recommendation and sending a message are **two different things**. Approving writes one
+line to a file and calls nothing. Sending is a distinct request to `/api/deliver`, and it passes
+three independent gates:
 
-破損行があってもその行をスキップするだけで、監査画面は壊れません。
+1. **Approval on record.** The route calls `findLatestApproval(bookingId)` before anything else and
+   returns `409` if there is none. This is server-side, so a modified client cannot bypass it.
+2. **Provider configured.** No `WHATSAPP_PROVIDER` + credentials → dry run.
+3. **Kill switch on.** `DELIVERY_ALLOW_REAL_SEND` must be exactly `"true"` → otherwise dry run.
 
-## データフロー詳細
+Dry run means the adapter validates the request, records it, and makes **no network call**. A fresh
+clone of this repository cannot message anyone.
+
+The default path in the demo is neither of those: it is a **hand-off link** (`wa.me` /
+`mailto:`) that opens the staff member's own client with the draft pre-filled. The human is
+unavoidably the one who presses send, and nothing leaves the server at all.
+
+### 5. The audit log is append-only JSONL
+
+One record per line in `.data/audit-log.jsonl`. Never updated, never deleted. Two record kinds
+share the file, discriminated by `kind`:
+
+- `decision` — the staff choice plus a snapshot of the rule result, the AI result and the data
+  sources at that moment.
+- `delivery` — the channel, the mode, the outcome, the **masked** destination, the message
+  **length**, and the id of the approving decision.
+
+Both always carry `bookingSystemMutated: false`. A corrupt line is skipped rather than breaking the
+audit screen.
+
+Message bodies and full contact details are never written to the log.
+
+## Data flow
 
 ### POST /api/analyze
 
 ```
-{ bookingId } → findBooking() → 404 if unknown
-              → getWeatherForBooking()   (Open-Meteo or fixture)
+{ bookingId } → findBooking()               → 404 if unknown
+              → getWeatherForBooking()      (Open-Meteo or fixture)
               → evaluateDeterministicRisk()
-              → getAiRecommendation()    (live or mock, zod 検証)
-              → { booking, weather, deterministic, ai, agreement, effectiveRiskLevel }
+              → getAiRecommendation()       (live or mock, zod-validated)
+              → { booking, weather, deterministic, ai, agreement,
+                  effectiveRiskLevel, delivery: { providers } }
 ```
+
+`delivery.providers` reports *capability only* (configured? real send on?) — never credentials.
 
 ### POST /api/decisions
 
 ```
 { bookingId, decision, reason, ...snapshot }
-  → zod 検証（rejected なら reason 必須）
-  → recordDecision() → .data/audit-log.jsonl に 1 行 append
+  → zod validation (a reason is mandatory when rejecting)
+  → recordDecision() → append 1 line to .data/audit-log.jsonl
   → 201 { entry, bookingSystemMutated: false }
 ```
 
-このパスにネットワーク I/O は一切ありません（`tests/no-external-calls.test.ts` で静的・動的の両方から検証）。
+No network I/O on this path at all — verified statically and dynamically in
+`tests/no-external-calls.test.ts`.
 
-## 天気データについて
+### POST /api/deliver
 
-Open-Meteo (`https://api.open-meteo.com/v1/forecast`) を API キーなしで使用します。
+```
+{ bookingId, channel, message }
+  → findBooking()                → 404 if unknown
+  → findLatestApproval()         → 409 if no approved decision exists   ← THE GATE
+  → deliverMessage()             → provider call, or dry run
+  → recordDelivery()             → append 1 line (masked destination, length only)
+  → 201 { result, entry, bookingSystemMutated: false }
+```
 
-取得項目: `precipitation_probability`, `precipitation`, `wind_speed_10m`, `wind_gusts_10m`,
-`temperature_2m`, `weather_code`（`wind_speed_unit=kmh`, `timezone` は予約のものを指定）。
+## About the weather data
 
-予約時間帯に重なる時刻のみを集計します（例: `10:00-11:30` → 10 時台と 11 時台）。
+Open-Meteo (`https://api.open-meteo.com/v1/forecast`) is used without an API key.
 
-**制約**: Open-Meteo は公式の気象警報を配信していません。本プロトタイプでは
-`WeatherSummary.alerts` を fixture 側で持たせています。実運用では気象庁の警報・注意報 API
-（あるいは同等の商用フィード）をアダプタとして追加する必要があります。
+Fields requested: `precipitation_probability`, `precipitation`, `wind_speed_10m`,
+`wind_gusts_10m`, `temperature_2m`, `weather_code`, with `wind_speed_unit=kmh` and the booking's
+own `timezone`.
 
-## 実予約システム接続時のアダプタ仕様
+Only the hours overlapping the booking window are aggregated (`10:00-11:30` → the 10:00 and 11:00
+slots).
 
-現状は「読み取りすら行わない」完全独立プロトタイプです。実システムに繋ぐ場合、
-以下 4 つのアダプタを **この順序で、段階的に** 導入することを想定しています。
+**Limitation:** Open-Meteo does not publish official weather warnings. In this prototype
+`WeatherSummary.alerts` comes from fixtures. A production deployment needs a real warnings feed —
+see Phase 4 below.
 
-### Phase 1: BookingReader（読み取り専用）
+## Adapter contracts for a real booking system
+
+Today this prototype does not even *read* from a booking system. Connecting it should happen in
+four phases, in this order.
+
+### Phase 1: BookingReader (read-only)
 
 ```ts
 interface BookingReader {
-  /** 指定期間の屋外撮影予約を取得する。読み取り専用スコープのみを要求する。 */
+  /** Outdoor shoots in a date range. Requires a read-only scope. */
   listUpcoming(range: { from: string; to: string }): Promise<Booking[]>;
   get(bookingId: string): Promise<Booking | null>;
 }
 ```
 
-要件:
+Requirements:
 
-- 認証は read-only スコープの API キー／サービスアカウントに限定する
-- 顧客の氏名・メールは**このプロセス内でのみ**使い、ログ・LLM プロンプト・監査ログには残さない
-  （現状の実装は `customerName` をプロンプトに含めているため、実データ接続時はここを疑似 ID に置換する）
-- レートリミットとキャッシュ（同一予約の再解析は 15 分程度キャッシュ）
+- Authenticate with a read-only API key or service account — nothing broader
+- Customer names, emails and phone numbers must stay inside the process: never in logs, never in
+  the audit log, never in an LLM prompt. **The current code puts `customerName` in the prompt**
+  (`src/lib/ai/prompt.ts`); replace it with a pseudonymous id before connecting real data
+- Rate limiting and caching (re-analysing the same booking within ~15 minutes should hit a cache)
 
-### Phase 2: NotificationDrafter（下書き作成まで。送信しない）
+### Phase 2: NotificationDrafter (drafts only, no sending)
 
 ```ts
 interface NotificationDrafter {
-  /** 顧客向けメッセージを「下書き」として保存する。送信はしない。 */
+  /** Save a customer message as a draft. Does not send it. */
   createDraft(input: {
     bookingId: string;
     subject: string;
@@ -149,53 +196,53 @@ interface NotificationDrafter {
 }
 ```
 
-要件:
+Requirements:
 
-- 送信 API（Resend / SendGrid 等）の **send スコープを持たせない**
-- 下書きは必ずスタッフの UI 上で編集・送信できる状態にする
-- 承認前に自動送信するオプションを実装しない
+- Do not grant the send scope to this credential
+- Drafts must be editable and sendable from the staff UI
+- Never add an "auto-send before approval" option
 
-### Phase 3: BookingMutator（変更提案。実行は人間）
+### Phase 3: BookingMutator (propose; a human applies)
 
 ```ts
 interface BookingMutator {
-  /** 「変更提案」を作る。予約そのものは変更しない。 */
+  /** Create a change proposal. Does not change the booking. */
   proposeChange(input: {
     bookingId: string;
     kind: "reschedule" | "location_change" | "plan_change";
     candidates: { date: string; time: string; location?: string }[];
     rationale: string;
-    approvedBy: string;      // スタッフの識別子。必須
-    auditEntryId: string;    // 監査ログとの紐付け。必須
+    approvedBy: string;      // staff identifier — required
+    auditEntryId: string;    // links back to the audit log — required
   }): Promise<{ proposalId: string }>;
 
-  /** 提案の適用。スタッフの明示操作からのみ呼ばれる。エージェントからは呼ばない。 */
+  /** Apply a proposal. Called only from an explicit staff action — never by the agent. */
   applyProposal(proposalId: string, actor: { staffId: string }): Promise<void>;
 }
 ```
 
-必須の安全要件:
+Mandatory safety requirements:
 
-- `applyProposal` を**エージェントの実行経路から到達不能にする**（別モジュール／別権限）
-- `approvedBy` と `auditEntryId` のない変更を API 側で拒否する
-- 冪等キー（`proposalId`）で二重適用を防ぐ
-- キャンセル・返金は本エージェントのスコープ外とし、アダプタを用意しない
+- `applyProposal` must be **unreachable from the agent's execution path** — separate module,
+  separate credential
+- The API must reject any change lacking `approvedBy` and `auditEntryId`
+- `proposalId` is the idempotency key, to prevent double application
+- Cancellation and refunds stay out of scope: do not build an adapter for them
 
-### Phase 4: WeatherAlertFeed（公式警報）
+### Phase 4: WeatherAlertFeed (official warnings)
 
 ```ts
 interface WeatherAlertFeed {
-  /** 指定座標・日付に発表中の警報・注意報を返す。 */
   getAlerts(input: { latitude: number; longitude: number; date: string }): Promise<string[]>;
 }
 ```
 
-`evaluateDeterministicRisk` は既に `alerts: string[]` を入力として受け取る設計のため、
-このアダプタを差し込むだけでルール側の変更は不要です。
+`evaluateDeterministicRisk` already takes `alerts: string[]` as input, so this drops in with no
+change to the rules.
 
-### 共通要件
+### Requirements common to all adapters
 
-- すべてのアダプタはサーバー側モジュールに閉じる（`"use client"` から import できないこと）
-- 失敗時は必ずフォールバックを持ち、例外を上位に投げない
-- 認証情報は環境変数のみ。`NEXT_PUBLIC_` を付けない
-- 監査ログに `adapterVersion` と `actor` を追加し、誰の承認で何が起きたかを追跡可能にする
+- Server-side modules only — a `"use client"` file must not be able to import them
+- Always fall back; never throw to the caller
+- Credentials from environment variables only, never `NEXT_PUBLIC_`
+- Add `actor` and `adapterVersion` to audit records so every change is attributable

@@ -3,10 +3,11 @@ import type { Booking } from "@/lib/types";
 /**
  * Mock bookings. NOT connected to any booking system.
  *
- * HARD RULE: every customerName must start with "Demo" and every customerEmail
- * must be on the reserved `example.com` domain (RFC 2606). No real names,
- * emails, phone numbers or addresses may ever appear here.
- * Enforced by tests/no-real-customer-data.test.ts.
+ * HARD RULES enforced by tests/no-real-customer-data.test.ts:
+ *   - customerName  must start with "Demo"
+ *   - customerEmail must use a domain reserved by RFC 2606 (example.com, ...)
+ *   - customerPhone must be in +1-555-01XX, the range reserved for fiction
+ * No real names, emails, phone numbers or addresses may ever appear here.
  */
 export const BOOKINGS: Booking[] = [
   {
@@ -21,7 +22,8 @@ export const BOOKINGS: Booking[] = [
     plan: "Tokyo Quick Shoot",
     customerName: "Demo Customer",
     customerEmail: "demo@example.com",
-    notes: "晴天想定のベースラインケース",
+    customerPhone: "+15550100",
+    notes: "Baseline case — clear skies expected.",
   },
   {
     bookingId: "demo-booking-002",
@@ -35,7 +37,8 @@ export const BOOKINGS: Booking[] = [
     plan: "Family Park Session",
     customerName: "Demo Customer Two",
     customerEmail: "demo-two@example.com",
-    notes: "しきい値直下。ルール判定とAI判定が割れるケース",
+    customerPhone: "+15550101",
+    notes: "Just under the threshold — the rules and the AI disagree here.",
   },
   {
     bookingId: "demo-booking-003",
@@ -49,7 +52,8 @@ export const BOOKINGS: Booking[] = [
     plan: "Sunset Portrait",
     customerName: "Demo Customer Three",
     customerEmail: "demo-three@example.com",
-    notes: "降水確率75%。Medium 想定",
+    customerPhone: "+15550102",
+    notes: "75% chance of rain — expected Medium.",
   },
   {
     bookingId: "demo-booking-004",
@@ -63,7 +67,8 @@ export const BOOKINGS: Booking[] = [
     plan: "Beach Couple Shoot",
     customerName: "Demo Customer Four",
     customerEmail: "demo-four@example.com",
-    notes: "降水確率85%。High 想定",
+    customerPhone: "+15550103",
+    notes: "85% chance of rain — expected High.",
   },
   {
     bookingId: "demo-booking-005",
@@ -77,7 +82,8 @@ export const BOOKINGS: Booking[] = [
     plan: "City Walk Shoot",
     customerName: "Demo Customer Five",
     customerEmail: "demo-five@example.com",
-    notes: "雷雨コード検出。High 想定",
+    customerPhone: "+15550104",
+    notes: "Thunderstorm code detected — expected High.",
   },
   {
     bookingId: "demo-booking-006",
@@ -91,13 +97,15 @@ export const BOOKINGS: Booking[] = [
     plan: "Seaside Family Shoot",
     customerName: "Demo Customer Six",
     customerEmail: "demo-six@example.com",
-    notes: "台風接近＋強風。High 想定",
+    customerPhone: "+15550105",
+    notes: "Approaching typhoon and strong wind — expected High.",
   },
   {
-    // Open-Meteo の予報範囲は約16日先まで。上の 6 件はそれより先の日付なので
-    // 必ず fixture にフォールバックする（シナリオを固定するため意図的）。
-    // この 1 件だけは直近の日付にして、ライブ API 経路を実際に動かす。
-    // ※ この日付を過ぎたらデモ前に更新すること。
+    // Open-Meteo only forecasts ~16 days ahead. The six bookings above are
+    // further out, so they always fall back to fixture weather — deliberate,
+    // it keeps the demo scenarios fixed. This one uses a near date so the
+    // live API path actually runs.
+    // NOTE: refresh this date before demoing after 2026-07-28.
     bookingId: "demo-booking-007",
     date: "2026-07-28",
     time: "14:00-15:00",
@@ -109,7 +117,8 @@ export const BOOKINGS: Booking[] = [
     plan: "Garden Portrait",
     customerName: "Demo Customer Seven",
     customerEmail: "demo-seven@example.com",
-    notes: "ライブ天気API検証用（Open-Meteo の予報範囲内の日付）",
+    customerPhone: "+15550106",
+    notes: "Live weather check — date is inside the Open-Meteo forecast range.",
   },
 ];
 

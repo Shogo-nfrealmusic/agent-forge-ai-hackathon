@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json({ error: "リクエストボディが不正です" }, { status: 400 });
+    return NextResponse.json({ error: "The request body is not valid JSON" }, { status: 400 });
   }
 
   const parsed = decisionInputSchema.safeParse(json);
@@ -39,9 +39,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ entry, bookingSystemMutated: false }, { status: 201 });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: "入力内容が不正です" }, { status: 400 });
+      return NextResponse.json({ error: "The submitted values are not valid" }, { status: 400 });
     }
     console.error("[decisions] failed to append audit entry", err);
-    return NextResponse.json({ error: "監査ログへの記録に失敗しました" }, { status: 500 });
+    return NextResponse.json({ error: "Could not write to the audit log" }, { status: 500 });
   }
 }

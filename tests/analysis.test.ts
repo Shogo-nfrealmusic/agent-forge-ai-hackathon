@@ -48,6 +48,16 @@ describe("analyzeBooking (offline)", () => {
     expect(result.ai.recommendation.requiresHumanReview).toBe(true);
   });
 
+  it("exposes delivery capability without leaking credentials", async () => {
+    const result = await analyzeBooking(findBooking("demo-booking-001") as Booking);
+    const whatsapp = result.delivery.providers.find((p) => p.channel === "whatsapp");
+    expect(whatsapp).toBeDefined();
+    expect(whatsapp?.realSendEnabled).toBe(false);
+    const serialised = JSON.stringify(result.delivery);
+    expect(serialised).not.toContain("accessToken");
+    expect(serialised).not.toContain("apiKey");
+  });
+
   it('flags "needs_check" when the AI level differs from the rule level', async () => {
     // 65% precipitation: rules say low (<70), the mock AI says medium (>=60).
     const result = await analyzeBooking(findBooking("demo-booking-002") as Booking);

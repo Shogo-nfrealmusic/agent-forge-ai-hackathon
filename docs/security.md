@@ -1,160 +1,211 @@
 # Security & Safety
 
-このプロトタイプは「AI が予約を勝手に触らない」ことを最優先に設計しています。
-以下はその保証内容と、それをどうテストで固定しているかの一覧です。
+This prototype is built around one priority: **the AI must never act on a booking or a customer by
+itself**. Below is what is guaranteed, and how each guarantee is pinned down by a test.
 
 ---
 
-## 1. 予約システムへの副作用がないこと
+## 1. No side effects on any booking system
 
-### 保証
+### Guarantees
 
-- 予約の**変更・キャンセル・返金を行うコードが存在しない**
-- Approve / Reject / Needs discussion のいずれを押しても、書き込み先は
-  ローカルファイル `.data/audit-log.jsonl` **のみ**
-- 監査ログの全レコードに `bookingSystemMutated: false` が記録される
+- No code exists that changes, cancels or refunds a booking
+- Approve / Reject / Needs discussion write to exactly one place: the local file
+  `.data/audit-log.jsonl`
+- Every audit record carries `bookingSystemMutated: false`
 
-### 実装上の担保
+### How it is enforced
 
-- `src/lib/audit/store.ts` と `src/app/api/decisions/route.ts` に `fetch()` が存在しない
-- Stripe / Slack / Google Calendar / Resend / Twilio / SendGrid / nodemailer の
-  SDK を依存関係に持たない
+- `src/lib/audit/store.ts` and `src/app/api/decisions/route.ts` contain no `fetch()` at all
+- No SDK for Stripe, Slack, Google Calendar, Resend, Twilio, SendGrid or nodemailer is a dependency
+  (the supported WhatsApp providers are reached over plain `fetch`, so they add no SDK either)
 
-### テスト（`tests/no-external-calls.test.ts`）
+### Tests (`tests/no-external-calls.test.ts`)
 
-- `fetch` を「呼ばれたら throw する」スパイに差し替えた状態で 3 種の判断を記録し、
-  一度も呼ばれないことを確認
-- 判断パスのソースに `fetch(` / `XMLHttpRequest` が現れないことを静的検査
-- 全ソースの import 文を走査し、禁止 SDK が含まれないことを確認
-- `api.stripe.com` / `hooks.slack.com` / `googleapis.com` / `api.resend.com` などの
-  文字列がソースに現れないことを確認
-
----
-
-## 2. Secret がブラウザに露出しないこと
-
-### ルール
-
-- `AI_API_KEY` は **`src/lib/ai/adapter.ts`（サーバー専用モジュール）でのみ**読む
-- `NEXT_PUBLIC_` プレフィックスの付いた認証情報を作らない
-  （Next.js は `NEXT_PUBLIC_*` をクライアントバンドルにインライン展開する）
-- `"use client"` モジュールから `process.env` を参照しない
-- AI provider が返したエラーレスポンス本文を UI に出さない
-  （プロバイダによってはキーの断片をエコーバックするため）
-
-### 実装上の担保
-
-- `ai/adapter.ts` に `typeof window !== "undefined"` の実行時ガードがあり、
-  万一クライアントにバンドルされた場合は即座に throw する
-- API キーは `Authorization: Bearer` ヘッダにのみ載せ、URL やリクエストボディには載せない
-- `.gitignore` で `.env*` を除外し、`!.env.example` のみ追跡する
-
-### テスト（`tests/no-secret-exposure.test.ts`）
-
-- `"use client"` モジュールが `process.env` を含まないこと
-- `"use client"` モジュールが AI アダプタ／監査ストアを import しないこと
-- `NEXT_PUBLIC_*` に `API_KEY` / `SECRET` / `TOKEN` / `PASSWORD` を含む変数がないこと
-- AI 認証情報を読むファイルが `lib/ai` または `app/api` 配下に限られること
-- `sk-` / `sk-ant-` / `AIza` / `ghp_` 形式のリテラルがソースに存在しないこと
-- `next.config.ts` が env を再エクスポートしていないこと
-- `.env.example` の secret 系変数の値が空であること
-
-### テスト（`tests/ai-adapter.test.ts`）
-
-- API キーが URL にもリクエストボディにも含まれず、`Authorization` ヘッダにのみ載ること
-- provider が 401 とキー断片を返しても、フォールバック理由に `sk-` が含まれないこと
+- With `fetch` replaced by a spy that throws on any call, all three decisions are recorded and the
+  spy is never called
+- Static scan: no `fetch(` / `XMLHttpRequest` on the decision path
+- Static scan: no forbidden SDK appears in any import statement
+- Static scan: the app references **only** the hosts it documents (Open-Meteo, the two WhatsApp
+  providers, and documentation links) — an undocumented host fails the build
 
 ---
 
-## 3. 実顧客データが存在しないこと
+## 2. Outbound messaging cannot fire without a human
 
-### ルール
+This is the part that changed when WhatsApp delivery was added, so it carries the most guardrails.
 
-- `customerName` は必ず `Demo` で始まるダミー値
-- `customerEmail` は RFC 2606 の予約ドメイン（`example.com` など）のみ
-- 電話番号・住所・郵便番号のフィールドを持たない
-- `bookingId` は `demo-booking-NNN` 形式
+### The three gates
 
-### テスト（`tests/no-real-customer-data.test.ts`）
-
-- 全 fixture の氏名・メールドメイン・ID 形式を検証
-- fixture のシリアライズ結果に電話番号・郵便番号パターンが現れないことを確認
-- **ソースツリー全体**を走査し、予約ドメイン以外のメールアドレスが 1 件もないことを確認
-- ソースツリー全体に電話番号パターンが現れないことを確認
-
-### 実データ接続時の注意
-
-現在の実装は `customerName` を LLM プロンプトに含めています（`src/lib/ai/prompt.ts`）。
-実データに接続する際は、ここを疑似 ID（例: `顧客A`）に置換し、
-顧客の氏名・メールを外部 LLM に送らない設計へ変更してください。
-詳細は [`architecture.md`](architecture.md) の Phase 1 を参照。
-
----
-
-## 4. AI 出力の信頼境界
-
-AI の出力は**信頼できない入力**として扱います。
-
-| 対策 | 実装 |
-|---|---|
-| 構造の強制 | `response_format: { type: "json_object" }` + zod による strict 検証 |
-| コードフェンス・前後の散文への耐性 | `extractJsonObject()` が最初の JSON オブジェクトを抽出 |
-| 表記ゆれの吸収 | 大文字 enum、数値文字列、0-100 の confidence を正規化 |
-| 検証失敗時 | 応答を破棄し mock にフォールバック（UI に理由を表示） |
-| 人間レビューの強制 | `requiresHumanReview` はサーバー側で常に `true` に上書き |
-| リスク判定の独立性 | 決定ルールは AI 呼び出し前に確定し、AI から書き換え不能 |
-| 不一致時 | `agreement: "needs_check"` → UI に「要確認」を大きく表示 |
-
-### 未対応（プロトタイプの制約）
-
-- `customerMessage` の内容フィルタリング（プロンプトインジェクションによる
-  不適切な文面生成のチェック）は未実装。実運用では送信前の人間確認に加えて
-  NG ワード検査を入れるべきです。
-- 出力は HTML ではなくプレーンテキストとして `<pre>` でレンダリングしており、
-  React の自動エスケープが効くため XSS の経路にはなりません。
-
-### テスト（`tests/ai-schema.test.ts`）
-
-空文字・散文のみ・途中で切れた JSON・配列・`null`・数値・必須フィールド欠落・
-未知の enum 値・範囲外 confidence・型違反など 13 パターンが、
-例外を投げずに安全に拒否されることを確認しています。
-
----
-
-## 5. 監査ログ
-
-- 追記専用（append-only）。更新・削除の API を持たない
-- Reject は理由の入力が必須（zod の `refine` で強制、空白のみも拒否）
-- 各レコードに判断時点のスナップショット（ルール判定・AI 判定・データソース）を保存
-- 破損行はスキップして読み込むため、監査画面が壊れない
-- `.data/` は `.gitignore` 済み（判断記録をコミットしない）
-
-### 未対応
-
-- 認証がないため `actor`（誰が承認したか）を記録できていません。
-  実運用では staff ID の記録が必須です。
-- ログの改ざん検知（ハッシュチェーン等）は未実装です。
-
----
-
-## 6. ネットワーク到達先の一覧
-
-このアプリがサーバーから接続しうる先は以下の**2 つだけ**です。
-
-| 宛先 | 目的 | 認証 | 無効化 |
+| # | Gate | Enforced where | Default |
 |---|---|---|---|
-| `api.open-meteo.com` | 天気予報の取得 | なし | `WEATHER_USE_LIVE=false` |
-| `AI_BASE_URL` で指定したエンドポイント | 対応案の生成 | Bearer トークン | `AI_API_KEY` 未設定 |
+| 1 | An **approved** decision must exist for this booking | `src/app/api/deliver/route.ts` (server) → `409` if missing | no approval exists |
+| 2 | A provider must be fully configured | `readWhatsAppConfig()` → dry run if not | not configured |
+| 3 | `DELIVERY_ALLOW_REAL_SEND` must be exactly `"true"` | `isRealSendEnabled()` → dry run if not | `false` |
 
-両方を無効化すると、アプリは完全にオフラインで動作します。
+In dry run the adapter validates the request and records it, but performs **no network call**. A
+fresh clone of this repository cannot message anyone.
+
+The gate lives on the server, so editing the client cannot bypass it.
+
+### The default demo path sends nothing from the server
+
+The UI's primary action is a **hand-off link** — a `wa.me` click-to-chat URL or a `mailto:` URL
+with the draft pre-filled. It opens the staff member's own client; they press send. No provider
+account, no API key, and no outbound request from this application.
+
+### Email has no provider adapter, deliberately
+
+The original brief for this prototype forbade connecting to email services. WhatsApp was added
+later as an explicit requirement, so it has a real adapter; email keeps the original constraint and
+stays hand-off only. `src/lib/delivery/email.ts` documents the `EmailSender` interface to implement
+if that changes — the gates, audit records and masking around it need no modification.
+
+### Tests (`tests/delivery.test.ts`, `tests/no-external-calls.test.ts`)
+
+- No provider configured → `fetch` is never called
+- Kill switch off → `fetch` is never called, even with a provider configured
+- The kill switch only accepts the exact string `"true"` (`"TRUE"`, `"1"`, `"false"` all stay off)
+- A non-E.164 number or an empty message fails before any network call
+- Approving a recommendation does not send anything; it only makes a later send possible
+- Static: the deliver route calls `findLatestApproval` **before** `deliverMessage`, and always calls
+  `recordDelivery`
 
 ---
 
-## 7. デプロイ時のチェックリスト
+## 3. Secrets stay on the server
 
-- [ ] `AI_API_KEY` をホスティング側の環境変数（Vercel の Environment Variables 等）に設定し、
-      リポジトリにはコミットしない
-- [ ] `NEXT_PUBLIC_` の付いた認証情報が 1 つもないことを確認（`npm test` で自動検証）
-- [ ] `.data/` が永続ボリュームか外部ストアに向いているか確認
-      （サーバーレス環境ではファイルシステムが揮発するため、監査ログは DB へ移す必要がある）
-- [ ] このプロトタイプに認証はない。公開 URL に置く場合は Basic 認証等でアクセスを制限する
+### Rules
+
+- `AI_API_KEY` and the WhatsApp/Twilio credentials are read **only** in server-only modules under
+  `src/lib/ai/`, `src/lib/delivery/` and `src/app/api/`
+- No credential is ever given a `NEXT_PUBLIC_` prefix (Next.js inlines those into the browser
+  bundle)
+- No `"use client"` module reads `process.env`
+- Provider error response bodies are never surfaced to the UI — some providers echo the credential
+  back in an error
+
+### How it is enforced
+
+- `ai/adapter.ts` and `delivery/whatsapp.ts` each have a `typeof window !== "undefined"` runtime
+  guard that throws immediately if the module is ever bundled for the browser
+- Credentials travel in the `Authorization` header only — never in a URL or a request body
+- `.gitignore` excludes `.env*` and re-includes only `!.env.example`
+
+### Tests (`tests/no-secret-exposure.test.ts`, `tests/delivery.test.ts`, `tests/ai-adapter.test.ts`)
+
+- No `"use client"` module contains `process.env`
+- No `"use client"` module imports the AI adapter, the audit store, or the WhatsApp/email adapters
+- No `NEXT_PUBLIC_*` variable contains `API_KEY` / `SECRET` / `TOKEN` / `PASSWORD` / `CREDENTIAL`
+- Any file reading a credential env var must live in an allow-listed server directory
+- No `sk-`, `sk-ant-`, `AIza` or `ghp_` shaped literal exists in the source
+- `next.config.ts` does not re-export env vars to the client
+- `.env.example` ships every secret-shaped variable **empty**, and `DELIVERY_ALLOW_REAL_SEND=false`
+- The API key and the WhatsApp token never appear in a request URL or body
+- A provider returning `401` with the token echoed in the body does not leak it into the UI message
+
+---
+
+## 4. No real customer data
+
+### Rules
+
+- `customerName` must start with `Demo`
+- `customerEmail` must use a domain reserved by RFC 2606 (`example.com`, …)
+- `customerPhone` must be in **`+1-555-01XX`**, the North American range reserved for fiction — so
+  a number in this repo can never route to a real person. This matters much more now that the app
+  can actually send WhatsApp messages.
+- No address, postal code, date of birth or payment field exists on the model
+
+### Tests (`tests/no-real-customer-data.test.ts`)
+
+- Every fixture's name, email domain, phone range and id format is checked
+- Phone numbers must be unique per booking (so a demo cannot accidentally message one number
+  repeatedly)
+- The **whole source tree** is scanned: no email outside the reserved domains, no phone number
+  outside the fictional range (the Twilio sandbox sender is the one documented exception), no
+  Japanese-format phone number
+
+### Before connecting real data
+
+`src/lib/ai/prompt.ts` currently includes `customerName` in the LLM prompt. With mock data that is
+harmless; with real data it sends a customer's name to a third-party model. Replace it with a
+pseudonymous id first. See Phase 1 in [`architecture.md`](architecture.md).
+
+---
+
+## 5. AI output is treated as untrusted input
+
+| Control | Implementation |
+|---|---|
+| Enforce structure | `response_format: { type: "json_object" }` plus strict zod validation |
+| Tolerate fences and prose | `extractJsonObject()` pulls the first JSON object out |
+| Normalise quirks | Uppercase enums, numeric strings, 0-100 confidence values |
+| On validation failure | Discard the response, fall back to mock, show the reason in the UI |
+| Force human review | `requiresHumanReview` is overwritten to `true` server-side |
+| Keep the rules independent | The rule result is computed before the AI runs and cannot be modified by it |
+| On disagreement | `agreement: "needs_check"` → a prominent NEEDS CHECK banner |
+
+### Not covered (prototype limitation)
+
+- **No content filtering on `customerMessage`.** A prompt-injection attack on the weather or
+  booking data could in principle steer the drafted wording. Mitigations in place: a staff member
+  reads the message before it is sent, and the message is fully editable in the UI. A production
+  system should add outbound content checks as well.
+- Output is rendered as plain text in a `<textarea>`, so React's escaping applies and it is not an
+  XSS vector.
+
+### Tests (`tests/ai-schema.test.ts`)
+
+Thirteen malformed shapes — empty string, prose only, truncated JSON, arrays, `null`, numbers,
+missing fields, unknown enum values, out-of-range confidence, wrong types — are all rejected
+safely, without throwing.
+
+---
+
+## 6. The audit log
+
+- Append-only. There is no update or delete API.
+- Rejecting requires a reason (enforced by a zod `refine`; whitespace-only is refused too)
+- Each record snapshots the rule result, the AI result and the data sources at decision time
+- Delivery records store a **masked** destination (`+1555**03`) and the message **length** only —
+  never the body, never the full phone number or email
+- Corrupt lines are skipped on read, so the audit screen cannot be broken by a bad write
+- `.data/` is gitignored — decisions are never committed
+
+### Not covered (prototype limitation)
+
+- **No authentication**, so there is no `actor` field recording *who* approved something. This is
+  mandatory before real use.
+- No tamper-evidence (hash chaining) on the log.
+- On serverless hosting the filesystem is ephemeral; the log must move to a database.
+
+---
+
+## 7. Every host this app can reach
+
+| Host | Purpose | Auth | How to disable |
+|---|---|---|---|
+| `api.open-meteo.com` | Weather forecast | none | `WEATHER_USE_LIVE=false` |
+| `AI_BASE_URL` (default DashScope) | Generate the recommendation | Bearer token | leave `AI_API_KEY` empty |
+| `graph.facebook.com` | WhatsApp Cloud API | Bearer token | leave `WHATSAPP_PROVIDER` empty |
+| `api.twilio.com` | Twilio WhatsApp | Basic auth | leave `WHATSAPP_PROVIDER` empty |
+
+With none of those configured, the app runs completely offline. A test fails the build if any other
+host appears in the source.
+
+---
+
+## 8. Deployment checklist
+
+- [ ] Put `AI_API_KEY` and any provider credentials in the host's environment settings, never in the
+      repository
+- [ ] Confirm no `NEXT_PUBLIC_` credential exists (`npm test` checks this automatically)
+- [ ] Decide deliberately about `DELIVERY_ALLOW_REAL_SEND`. **Leave it `false` for demos.** Turning
+      it on means real messages reach real phones.
+- [ ] Replace the fictional phone numbers before pointing this at real customers, and complete
+      Phase 1 of the architecture doc (pseudonymise the customer name in the prompt) first
+- [ ] Point `.data/` at a persistent volume, or move the audit log to a database — serverless
+      filesystems are ephemeral
+- [ ] This prototype has **no authentication**. Put it behind access control before exposing it on a
+      public URL.
